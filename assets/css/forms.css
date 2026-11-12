@@ -1,0 +1,68 @@
+/* Spiral Forms — front-end styles. Inherits theme fonts/colors; override with --sf-* variables. */
+.sf-wrap {
+	--sf-accent: #2563eb;
+	--sf-border: #c3c4c7;
+	--sf-error: #b32d2e;
+	--sf-radius: 4px;
+	max-width: 100%;
+	margin: 1.5em 0;
+}
+.sf-form { display: flex; flex-direction: column; gap: 1.1em; }
+.sf-field { margin: 0; }
+.sf-field fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.sf-label { display: block; font-weight: 600; margin: 0 0 .35em; padding: 0; }
+.sf-required { color: var(--sf-error); }
+.sf-wrap input[type="text"],
+.sf-wrap input[type="email"],
+.sf-wrap input[type="tel"],
+.sf-wrap input[type="number"],
+.sf-wrap input[type="date"],
+.sf-wrap select,
+.sf-wrap textarea {
+	box-sizing: border-box;
+	width: 100%;
+	padding: .6em .75em;
+	border: 1px solid var(--sf-border);
+	border-radius: var(--sf-radius);
+	font: inherit;
+	line-height: 1.4;
+	background: #fff;
+	color: inherit;
+}
+.sf-wrap input:focus, .sf-wrap select:focus, .sf-wrap textarea:focus {
+	outline: 2px solid var(--sf-accent);
+	outline-offset: 0;
+	border-color: var(--sf-accent);
+}
+.sf-choices { display: flex; flex-direction: column; gap: .35em; }
+.sf-choice { display: flex; align-items: center; gap: .5em; font-weight: normal; cursor: pointer; }
+.sf-choice input { margin: 0; }
+.sf-description { font-size: .9em; opacity: .8; margin-top: .3em; }
+.sf-has-error input, .sf-has-error select, .sf-has-error textarea { border-color: var(--sf-error); }
+.sf-error { color: var(--sf-error); font-size: .9em; margin-top: .3em; }
+.sf-error-summary {
+	border-left: 4px solid var(--sf-error);
+	background: rgba(179, 45, 46, .07);
+	padding: .75em 1em;
+	margin-bottom: 1em;
+}
+.sf-confirmation {
+	border-left: 4px solid #00a32a;
+	background: rgba(0, 163, 42, .07);
+	padding: 1em 1.25em;
+}
+.sf-confirmation > :last-child { margin-bottom: 0; }
+.sf-submit {
+	cursor: pointer;
+	padding: .7em 1.6em;
+	border: 0;
+	border-radius: var(--sf-radius);
+	background: var(--sf-accent);
+	color: #fff;
+	font: inherit;
+	font-weight: 600;
+}
+.sf-submit:hover { filter: brightness(1.08); }
+.sf-submit[disabled] { opacity: .6; cursor: wait; }
+.sf-hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; overflow: hidden; }
+.sf-captcha { margin: .25em 0; }

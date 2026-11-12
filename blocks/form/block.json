@@ -1,0 +1,15 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "spiral-forms/form",
+	"title": "Spiral Form",
+	"category": "widgets",
+	"icon": "feedback",
+	"description": "Embed a Spiral Forms form.",
+	"keywords": [ "form", "contact", "spiral" ],
+	"textdomain": "spiral-forms",
+	"attributes": {
+		"formId": { "type": "integer", "default": 0 }
+	},
+	"supports": { "html": false, "align": [ "wide", "full" ] }
+}

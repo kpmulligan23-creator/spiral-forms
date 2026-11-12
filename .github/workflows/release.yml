@@ -1,0 +1,41 @@
+name: Build release
+
+# Push a tag like v0.2.0 (matching the Version: header in spiral-forms.php)
+# and this builds spiral-forms.zip and attaches it to a GitHub Release.
+# Sites pick it up through the built-in updater.
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version matches tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          HEADER=$(grep -m1 -E '^\s*\*\s*Version:' spiral-forms.php | awk '{print $NF}')
+          CONST=$(grep -m1 "SPIRAL_FORMS_VERSION'," spiral-forms.php | sed -E "s/.*'([^']+)'\);/\1/")
+          echo "tag=$TAG header=$HEADER const=$CONST"
+          [ "$TAG" = "$HEADER" ] && [ "$TAG" = "$CONST" ] || { echo "::error::Version mismatch"; exit 1; }
+
+      - name: Lint PHP
+        run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l
+
+      - name: Build zip
+        run: |
+          mkdir -p build/spiral-forms
+          rsync -a --exclude-from=.distignore ./ build/spiral-forms/
+          cd build && zip -rq spiral-forms.zip spiral-forms
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/spiral-forms.zip
+          generate_release_notes: true
