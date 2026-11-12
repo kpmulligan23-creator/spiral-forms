@@ -14,6 +14,36 @@ class Spiral_Forms_Submission {
 
 	public static function init() {
 		add_action( 'template_redirect', array( __CLASS__, 'maybe_handle' ), 5 );
+		add_action( 'wp_ajax_spiral_forms_submit', array( __CLASS__, 'ajax' ) );
+		add_action( 'wp_ajax_nopriv_spiral_forms_submit', array( __CLASS__, 'ajax' ) );
+	}
+
+	/**
+	 * AJAX submit (used by assets/js/forms.js; the plain POST path is the no-JS fallback).
+	 */
+	public static function ajax() {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		$form = Spiral_Forms_Forms::get( absint( $_POST['spiral_form_id'] ?? 0 ) );
+		if ( ! $form ) {
+			wp_send_json_error( array( 'message' => __( 'Form not found.', 'spiral-forms' ) ), 404 );
+		}
+		$post = wp_unslash( $_POST );
+		// phpcs:enable
+
+		$result = self::process( $form, $post );
+		if ( ! $result['success'] ) {
+			wp_send_json_error(
+				array(
+					'errors'  => $result['errors'],
+					'message' => $result['errors']['_form'] ?? __( 'Please correct the errors below.', 'spiral-forms' ),
+				)
+			);
+		}
+		$s = $form['settings'];
+		if ( 'redirect' === $s['confirmation_type'] && $s['redirect_url'] ) {
+			wp_send_json_success( array( 'redirect' => $s['redirect_url'] ) );
+		}
+		wp_send_json_success( array( 'message' => wp_kses_post( wpautop( $result['message'] ) ) ) );
 	}
 
 	public static function state( $form_id ) {
@@ -75,14 +105,19 @@ class Spiral_Forms_Submission {
 	public static function process( array $form, array $post ) {
 		$raw    = isset( $post['sf_fields'] ) && is_array( $post['sf_fields'] ) ? $post['sf_fields'] : array();
 		$errors = array();
-		$values = array();   // id => raw-ish sanitized value, for re-rendering.
-		$data   = array();   // id => [ id, label, type, value ] for storage/notifications.
+		$values = array();   // id => sanitized value (arrays for name/address parts), for re-rendering + conditions.
+		$data   = array();   // id => [ id, label, type, value ] for storage/notifications (visible fields only).
 
 		foreach ( $form['fields'] as $f ) {
-			$value = self::sanitize_value( $f, $raw[ $f['id'] ] ?? null );
-			$error = self::validate_value( $f, $value );
+			$values[ $f['id'] ] = self::sanitize_value( $f, $raw[ $f['id'] ] ?? null );
+		}
 
-			$values[ $f['id'] ] = $value;
+		foreach ( $form['fields'] as $f ) {
+			if ( ! Spiral_Forms_Forms::is_visible( $f, self::condition_values( $form, $values ) ) ) {
+				continue; // Hidden by show/hide rules: not validated, not stored, not emailed.
+			}
+			$value = $values[ $f['id'] ];
+			$error = self::validate_value( $f, $value );
 			if ( $error ) {
 				$errors[ $f['id'] ] = $error;
 			}
@@ -90,13 +125,27 @@ class Spiral_Forms_Submission {
 				'id'    => $f['id'],
 				'label' => $f['label'],
 				'type'  => $f['type'],
-				'value' => $value,
+				'value' => self::storage_value( $f, $value ),
 			);
 		}
 
+		$page_url = self::current_url();
+		if ( wp_doing_ajax() && ! empty( $post['sf_page_url'] ) ) {
+			$page_url = esc_url_raw( (string) $post['sf_page_url'] );
+		}
+		$meta = array(
+			'ip'         => self::client_ip(),
+			'user_agent' => isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '',
+			'page_url'   => $page_url,
+			'user_id'    => get_current_user_id(),
+		);
+
 		$spam = Spiral_Forms_Spam::check( $post );
 		if ( 'spam' === $spam ) {
-			// Pretend success to bots, but don't store or send anything.
+			// Keep it for review (Entries → Spam), send nothing, and look successful to the bot.
+			if ( ! empty( $form['settings']['store_entries'] ) && ! empty( $form['settings']['store_spam'] ) && $data ) {
+				Spiral_Forms_Entries::insert( $form['id'], $data, $meta + array( 'status' => 'spam' ) );
+			}
 			return array(
 				'success' => true,
 				'errors'  => array(),
@@ -121,21 +170,12 @@ class Spiral_Forms_Submission {
 			'form'     => $form,
 			'values'   => $data,
 			'entry_id' => 0,
-			'page_url' => self::current_url(),
-			'ip'       => self::client_ip(),
+			'page_url' => $meta['page_url'],
+			'ip'       => $meta['ip'],
 		);
 
 		if ( ! empty( $form['settings']['store_entries'] ) ) {
-			$context['entry_id'] = Spiral_Forms_Entries::insert(
-				$form['id'],
-				$data,
-				array(
-					'ip'         => $context['ip'],
-					'user_agent' => isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) : '',
-					'page_url'   => $context['page_url'],
-					'user_id'    => get_current_user_id(),
-				)
-			);
+			$context['entry_id'] = Spiral_Forms_Entries::insert( $form['id'], $data, $meta );
 		}
 
 		self::send_notifications( $form, $context );
@@ -151,7 +191,49 @@ class Spiral_Forms_Submission {
 		);
 	}
 
+	/** Sub-inputs of composite fields. */
+	public static function parts( array $f ) {
+		if ( 'name' === $f['type'] && 'first-last' === $f['format'] ) {
+			return array( 'first', 'last' );
+		}
+		if ( 'address' === $f['type'] ) {
+			return array( 'address1', 'address2', 'city', 'state', 'postal' );
+		}
+		return array();
+	}
+
+	/** Values used by show/hide rules: composites flattened to one string. */
+	private static function condition_values( array $form, array $values ) {
+		$out = array();
+		foreach ( $form['fields'] as $f ) {
+			$v                = $values[ $f['id'] ] ?? '';
+			$out[ $f['id'] ]  = self::parts( $f ) ? trim( implode( ' ', array_filter( (array) $v, 'strlen' ) ) ) : $v;
+		}
+		return $out;
+	}
+
+	/** Composite values become a readable string for storage/email/CSV. */
+	private static function storage_value( array $f, $value ) {
+		if ( 'name' === $f['type'] && is_array( $value ) ) {
+			return trim( $value['first'] . ' ' . $value['last'] );
+		}
+		if ( 'address' === $f['type'] && is_array( $value ) ) {
+			$city_line = trim( $value['city'] . ( $value['city'] && $value['state'] ? ', ' : ' ' ) . $value['state'] . ' ' . $value['postal'] );
+			return implode( "\n", array_filter( array( $value['address1'], $value['address2'], $city_line ), 'strlen' ) );
+		}
+		return $value;
+	}
+
 	private static function sanitize_value( array $f, $raw ) {
+		$parts = self::parts( $f );
+		if ( $parts ) {
+			$out = array();
+			foreach ( $parts as $p ) {
+				$v         = is_array( $raw ) && isset( $raw[ $p ] ) && is_scalar( $raw[ $p ] ) ? (string) $raw[ $p ] : '';
+				$out[ $p ] = trim( sanitize_text_field( mb_substr( $v, 0, 500 ) ) );
+			}
+			return $out;
+		}
 		if ( 'checkbox' === $f['type'] ) {
 			$vals = array();
 			foreach ( (array) $raw as $v ) {
@@ -175,6 +257,24 @@ class Spiral_Forms_Submission {
 	}
 
 	private static function validate_value( array $f, $value ) {
+		if ( self::parts( $f ) ) {
+			$required = 'address' === $f['type'] ? array( 'address1', 'city', 'state', 'postal' ) : array( 'first', 'last' );
+			$any      = (bool) array_filter( $value, 'strlen' );
+			if ( ! $any ) {
+				return ! empty( $f['required'] ) ? __( 'This field is required.', 'spiral-forms' ) : '';
+			}
+			foreach ( $required as $p ) {
+				if ( '' === $value[ $p ] && ( ! empty( $f['required'] ) || 'address' === $f['type'] ) ) {
+					return 'address' === $f['type']
+						? __( 'Please enter a complete address.', 'spiral-forms' )
+						: __( 'Please enter your first and last name.', 'spiral-forms' );
+				}
+			}
+			if ( 'address' === $f['type'] && ! preg_match( '/^\d{5}(-?\d{4})?$/', $value['postal'] ) ) {
+				return __( 'Please enter a valid ZIP code.', 'spiral-forms' );
+			}
+			return '';
+		}
 		$empty = is_array( $value ) ? ! $value : '' === $value;
 		if ( $empty ) {
 			return ! empty( $f['required'] ) ? __( 'This field is required.', 'spiral-forms' ) : '';

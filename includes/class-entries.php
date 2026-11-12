@@ -17,13 +17,14 @@ class Spiral_Forms_Entries {
 				'form_id'    => (int) $form_id,
 				'fields'     => wp_json_encode( array_values( $fields ) ),
 				'is_read'    => 0,
+				'status'     => (string) ( $meta['status'] ?? '' ),
 				'ip'         => substr( (string) ( $meta['ip'] ?? '' ), 0, 100 ),
 				'user_agent' => substr( (string) ( $meta['user_agent'] ?? '' ), 0, 255 ),
 				'page_url'   => substr( (string) ( $meta['page_url'] ?? '' ), 0, 2048 ),
 				'user_id'    => (int) ( $meta['user_id'] ?? 0 ),
-				'created_at' => current_time( 'mysql', true ),
+				'created_at' => empty( $meta['created_at'] ) ? current_time( 'mysql', true ) : $meta['created_at'],
 			),
-			array( '%d', '%s', '%d', '%s', '%s', '%s', '%d', '%s' )
+			array( '%d', '%s', '%d', '%s', '%s', '%s', '%s', '%d', '%s' )
 		);
 		return $ok ? (int) $wpdb->insert_id : 0;
 	}
@@ -50,6 +51,7 @@ class Spiral_Forms_Entries {
 				'page'     => 1,
 				'order'    => 'DESC',
 				'ids'      => array(),
+				'status'   => '', // '' = real entries, 'spam', or 'any'.
 			)
 		);
 		$table = Spiral_Forms_Install::table();
@@ -59,6 +61,10 @@ class Spiral_Forms_Entries {
 		if ( $args['form_id'] ) {
 			$where[] = 'form_id = %d';
 			$vals[]  = (int) $args['form_id'];
+		}
+		if ( 'any' !== $args['status'] ) {
+			$where[] = 'status = %s';
+			$vals[]  = (string) $args['status'];
 		}
 		if ( '' !== $args['search'] ) {
 			$where[] = 'fields LIKE %s';
@@ -93,15 +99,46 @@ class Spiral_Forms_Entries {
 		global $wpdb;
 		$table = Spiral_Forms_Install::table();
 		if ( $form_id ) {
-			return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE is_read = 0 AND form_id = %d", $form_id ) ); // phpcs:ignore
+			return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE is_read = 0 AND status = '' AND form_id = %d", $form_id ) ); // phpcs:ignore
 		}
-		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE is_read = 0" ); // phpcs:ignore
+		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE is_read = 0 AND status = ''" ); // phpcs:ignore
 	}
 
 	public static function count_for_form( $form_id ) {
 		global $wpdb;
 		$table = Spiral_Forms_Install::table();
-		return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE form_id = %d", $form_id ) ); // phpcs:ignore
+		return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE form_id = %d AND status = ''", $form_id ) ); // phpcs:ignore
+	}
+
+	public static function count_spam( $form_id = 0 ) {
+		global $wpdb;
+		$table = Spiral_Forms_Install::table();
+		if ( $form_id ) {
+			return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE status = 'spam' AND form_id = %d", $form_id ) ); // phpcs:ignore
+		}
+		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$table} WHERE status = 'spam'" ); // phpcs:ignore
+	}
+
+	public static function set_status( $id, $status ) {
+		global $wpdb;
+		return $wpdb->update( Spiral_Forms_Install::table(), array( 'status' => (string) $status ), array( 'id' => (int) $id ), array( '%s' ), array( '%d' ) );
+	}
+
+	/**
+	 * Daily cron: delete entries older than each form's retention setting,
+	 * and spam older than 30 days.
+	 */
+	public static function purge_expired() {
+		global $wpdb;
+		$table = Spiral_Forms_Install::table();
+		$wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE status = 'spam' AND created_at < %s", gmdate( 'Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS ) ) ); // phpcs:ignore
+		foreach ( Spiral_Forms_Forms::all() as $p ) {
+			$form = Spiral_Forms_Forms::get( $p->ID );
+			$days = $form ? (int) $form['settings']['retention_days'] : 0;
+			if ( $days > 0 ) {
+				$wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE form_id = %d AND created_at < %s", $p->ID, gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS ) ) ); // phpcs:ignore
+			}
+		}
 	}
 
 	public static function mark_read( $id, $read = true ) {

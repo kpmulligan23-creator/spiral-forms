@@ -45,3 +45,8 @@
 .sf-entry-layout { display: grid; grid-template-columns: 1fr 280px; gap: 20px; align-items: start; }
 @media (max-width: 900px) { .sf-entry-layout { grid-template-columns: 1fr; } }
 .sf-entry-fields th { width: 220px; font-weight: 600; vertical-align: top; }
+.sf-cond { border-top: 1px dashed #dcdcde; margin-top: 8px; padding-top: 4px; }
+.sf-cond-rule { display: flex; gap: 6px; align-items: center; margin: 0 0 6px; flex-wrap: wrap; }
+.sf-cond-rule select, .sf-cond-rule input { max-width: 220px; }
+.sf-rule-del { color: #b32d2e !important; }
+.subsubsub .sf-count { color: #50575e; }

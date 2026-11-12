@@ -12,8 +12,10 @@ class Spiral_Forms_Entries_Table extends WP_List_Table {
 
 	private $form_id;
 	private $form;
+	private $status;
 
-	public function __construct( $form_id ) {
+	public function __construct( $form_id, $status = '' ) {
+		$this->status = 'spam' === $status ? 'spam' : '';
 		parent::__construct(
 			array(
 				'singular' => 'entry',
@@ -40,7 +42,14 @@ class Spiral_Forms_Entries_Table extends WP_List_Table {
 	}
 
 	protected function get_bulk_actions() {
+		if ( 'spam' === $this->status ) {
+			return array(
+				'not_spam' => __( 'Not spam', 'spiral-forms' ),
+				'delete'   => __( 'Delete permanently', 'spiral-forms' ),
+			);
+		}
 		return array(
+			'mark_spam'   => __( 'Mark as spam', 'spiral-forms' ),
 			'mark_read'   => __( 'Mark read', 'spiral-forms' ),
 			'mark_unread' => __( 'Mark unread', 'spiral-forms' ),
 			'delete'      => __( 'Delete', 'spiral-forms' ),
@@ -58,6 +67,7 @@ class Spiral_Forms_Entries_Table extends WP_List_Table {
 				'per_page' => $per_page,
 				'page'     => $this->get_pagenum(),
 				'order'    => $order,
+				'status'   => $this->status,
 			)
 		);
 		$this->items = $result['items'];
@@ -113,10 +123,15 @@ class Spiral_Forms_Entries_Table extends WP_List_Table {
 
 	private function actions( $item ) {
 		$del = wp_nonce_url( admin_url( 'admin-post.php?action=spiral_forms_delete_entry&entry_id=' . $item['id'] ), 'sf_del_entry_' . $item['id'] );
-		return array(
+		$base = array(
 			'view'  => '<a href="' . esc_url( admin_url( 'admin.php?page=spiral-forms-entries&view=' . $item['id'] ) ) . '">' . esc_html__( 'View', 'spiral-forms' ) . '</a>',
 			'trash' => '<a href="' . esc_url( $del ) . '" onclick="return confirm(\'' . esc_js( __( 'Delete this entry?', 'spiral-forms' ) ) . '\');">' . esc_html__( 'Delete', 'spiral-forms' ) . '</a>',
 		);
+		if ( 'spam' === $item['status'] ) {
+			$ns           = wp_nonce_url( admin_url( 'admin-post.php?action=spiral_forms_not_spam&entry_id=' . $item['id'] ), 'sf_not_spam_' . $item['id'] );
+			$base['spam'] = '<a href="' . esc_url( $ns ) . '">' . esc_html__( 'Not spam', 'spiral-forms' ) . '</a>';
+		}
+		return $base;
 	}
 
 	public function no_items() {
@@ -132,6 +147,7 @@ class Spiral_Forms_Entries_Admin {
 	public static function init() {
 		add_action( 'admin_post_spiral_forms_delete_entry', array( __CLASS__, 'delete_entry' ) );
 		add_action( 'admin_post_spiral_forms_export', array( __CLASS__, 'export' ) );
+		add_action( 'admin_post_spiral_forms_not_spam', array( __CLASS__, 'not_spam' ) );
 		add_action( 'admin_init', array( __CLASS__, 'handle_bulk' ) );
 	}
 
@@ -145,9 +161,10 @@ class Spiral_Forms_Entries_Admin {
 			return;
 		}
 		$form_id = isset( $_GET['form_id'] ) ? absint( $_GET['form_id'] ) : 0;
+		$status  = isset( $_GET['status'] ) && 'spam' === $_GET['status'] ? 'spam' : '';
 		// phpcs:enable
 		$forms = Spiral_Forms_Forms::all();
-		$table = new Spiral_Forms_Entries_Table( $form_id );
+		$table = new Spiral_Forms_Entries_Table( $form_id, $status );
 		$table->prepare_items();
 		?>
 		<div class="wrap sf-admin">
@@ -158,8 +175,18 @@ class Spiral_Forms_Entries_Admin {
 			<hr class="wp-header-end">
 			<?php Spiral_Forms_Admin::notices(); ?>
 
+			<?php
+			$base_url = admin_url( 'admin.php?page=spiral-forms-entries' . ( $form_id ? '&form_id=' . $form_id : '' ) );
+			$n_spam   = Spiral_Forms_Entries::count_spam( $form_id );
+			?>
+			<ul class="subsubsub">
+				<li><a href="<?php echo esc_url( $base_url ); ?>" class="<?php echo '' === $status ? 'current' : ''; ?>"><?php esc_html_e( 'Entries', 'spiral-forms' ); ?></a> |</li>
+				<li><a href="<?php echo esc_url( $base_url . '&status=spam' ); ?>" class="<?php echo 'spam' === $status ? 'current' : ''; ?>"><?php esc_html_e( 'Spam', 'spiral-forms' ); ?> <span class="sf-count">(<?php echo (int) $n_spam; ?>)</span></a></li>
+			</ul>
+			<br class="clear">
 			<form method="get" class="sf-entries-filter">
 				<input type="hidden" name="page" value="spiral-forms-entries">
+				<?php if ( $status ) : ?><input type="hidden" name="status" value="spam"><?php endif; ?>
 				<select name="form_id" onchange="this.form.submit()">
 					<option value="0"><?php esc_html_e( 'All forms', 'spiral-forms' ); ?></option>
 					<?php foreach ( $forms as $p ) : ?>
@@ -222,6 +249,10 @@ class Spiral_Forms_Entries_Admin {
 						<?php if ( $entry['page_url'] ) : ?>
 							<p><strong><?php esc_html_e( 'Page', 'spiral-forms' ); ?>:</strong> <a href="<?php echo esc_url( $entry['page_url'] ); ?>" target="_blank" rel="noopener"><?php echo esc_html( wp_parse_url( $entry['page_url'], PHP_URL_PATH ) ?: '/' ); ?></a></p>
 						<?php endif; ?>
+						<?php if ( 'spam' === $entry['status'] ) : ?>
+							<p><span class="sf-badge"><?php esc_html_e( 'Spam', 'spiral-forms' ); ?></span>
+							<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=spiral_forms_not_spam&entry_id=' . $id ), 'sf_not_spam_' . $id ) ); ?>"><?php esc_html_e( 'Not spam', 'spiral-forms' ); ?></a></p>
+						<?php endif; ?>
 						<p><strong><?php esc_html_e( 'IP', 'spiral-forms' ); ?>:</strong> <?php echo esc_html( $entry['ip'] ); ?></p>
 						<?php if ( $entry['user_id'] ) : ?>
 							<?php $u = get_userdata( $entry['user_id'] ); ?>
@@ -250,6 +281,12 @@ class Spiral_Forms_Entries_Admin {
 			case 'delete':
 				Spiral_Forms_Entries::delete( $ids );
 				break;
+			case 'mark_spam':
+			case 'not_spam':
+				foreach ( $ids as $id ) {
+					Spiral_Forms_Entries::set_status( $id, 'mark_spam' === $action ? 'spam' : '' );
+				}
+				break;
 			case 'mark_read':
 			case 'mark_unread':
 				foreach ( $ids as $id ) {
@@ -260,6 +297,17 @@ class Spiral_Forms_Entries_Admin {
 				return;
 		}
 		wp_safe_redirect( remove_query_arg( array( 'paged' ), wp_get_referer() ) );
+		exit;
+	}
+
+	public static function not_spam() {
+		$id = isset( $_GET['entry_id'] ) ? absint( $_GET['entry_id'] ) : 0;
+		check_admin_referer( 'sf_not_spam_' . $id );
+		if ( ! current_user_can( Spiral_Forms_Admin::CAP ) ) {
+			wp_die( esc_html__( 'Not allowed.', 'spiral-forms' ) );
+		}
+		Spiral_Forms_Entries::set_status( $id, '' );
+		wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url( 'admin.php?page=spiral-forms-entries' ) );
 		exit;
 	}
 

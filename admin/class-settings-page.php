@@ -28,6 +28,8 @@ class Spiral_Forms_Settings_Page {
 			'turnstile_secret_key' => sanitize_text_field( $input['turnstile_secret_key'] ?? '' ),
 			'recaptcha_site_key'   => sanitize_text_field( $input['recaptcha_site_key'] ?? '' ),
 			'recaptcha_secret_key' => sanitize_text_field( $input['recaptcha_secret_key'] ?? '' ),
+			'recaptcha_type'       => ( $input['recaptcha_type'] ?? '' ) === 'v3' ? 'v3' : 'v2',
+			'recaptcha_threshold'  => min( 1, max( 0, (float) ( $input['recaptcha_threshold'] ?? 0.5 ) ) ),
 			'github_token'         => sanitize_text_field( $input['github_token'] ?? '' ),
 			'load_css'             => empty( $input['load_css'] ) ? 0 : 1,
 		);
@@ -90,7 +92,7 @@ class Spiral_Forms_Settings_Page {
 							$providers = array(
 								'none'      => __( 'None', 'spiral-forms' ),
 								'turnstile' => __( 'Cloudflare Turnstile (recommended)', 'spiral-forms' ),
-								'recaptcha' => __( 'Google reCAPTCHA v2 (checkbox)', 'spiral-forms' ),
+								'recaptcha' => __( 'Google reCAPTCHA', 'spiral-forms' ),
 							);
 							foreach ( $providers as $k => $label ) {
 								echo '<label><input type="radio" name="' . esc_attr( $opt ) . '[captcha_provider]" value="' . esc_attr( $k ) . '" ' . checked( $s['captcha_provider'], $k, false ) . '> ' . esc_html( $label ) . '</label><br>';
@@ -105,6 +107,18 @@ class Spiral_Forms_Settings_Page {
 					<tr>
 						<th><?php esc_html_e( 'Turnstile secret key', 'spiral-forms' ); ?></th>
 						<td><?php self::secret_field( 'turnstile_secret_key', $s['turnstile_secret_key'] ); ?></td>
+					</tr>
+					<tr>
+						<th><?php esc_html_e( 'reCAPTCHA version', 'spiral-forms' ); ?></th>
+						<td>
+							<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[recaptcha_type]" value="v2" <?php checked( $s['recaptcha_type'], 'v2' ); ?>> <?php esc_html_e( 'v2 — "I\'m not a robot" checkbox', 'spiral-forms' ); ?></label><br>
+							<label><input type="radio" name="<?php echo esc_attr( $opt ); ?>[recaptcha_type]" value="v3" <?php checked( $s['recaptcha_type'], 'v3' ); ?>> <?php esc_html_e( 'v3 — invisible, score based', 'spiral-forms' ); ?></label>
+							<p class="description"><?php esc_html_e( 'Keys are specific to a version. v3 submissions scoring below the threshold go to the Spam folder instead of being rejected.', 'spiral-forms' ); ?></p>
+						</td>
+					</tr>
+					<tr>
+						<th><label for="sf-rc-threshold"><?php esc_html_e( 'v3 score threshold', 'spiral-forms' ); ?></label></th>
+						<td><input type="number" id="sf-rc-threshold" min="0" max="1" step="0.1" class="small-text" name="<?php echo esc_attr( $opt ); ?>[recaptcha_threshold]" value="<?php echo esc_attr( $s['recaptcha_threshold'] ); ?>"> <span class="description"><?php esc_html_e( '0.0–1.0 (default 0.5)', 'spiral-forms' ); ?></span></td>
 					</tr>
 					<tr>
 						<th><?php esc_html_e( 'reCAPTCHA site key', 'spiral-forms' ); ?></th>

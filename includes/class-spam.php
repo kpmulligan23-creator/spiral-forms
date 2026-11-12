@@ -36,8 +36,13 @@ class Spiral_Forms_Spam {
 				$html .= '<div class="sf-captcha cf-turnstile" data-sitekey="' . esc_attr( $s['turnstile_site_key'] ) . '"></div>';
 				break;
 			case 'recaptcha':
-				wp_enqueue_script( 'google-recaptcha', 'https://www.google.com/recaptcha/api.js', array(), null, true ); // phpcs:ignore WordPress.WP.EnqueuedResourceParameters.MissingVersion
-				$html .= '<div class="sf-captcha g-recaptcha" data-sitekey="' . esc_attr( $s['recaptcha_site_key'] ) . '"></div>';
+				if ( 'v3' === $s['recaptcha_type'] ) {
+					wp_enqueue_script( 'google-recaptcha', 'https://www.google.com/recaptcha/api.js?render=' . rawurlencode( $s['recaptcha_site_key'] ), array(), null, true ); // phpcs:ignore WordPress.WP.EnqueuedResourceParameters.MissingVersion
+					$html .= '<input type="hidden" name="g-recaptcha-response" class="sf-recaptcha-v3" data-sitekey="' . esc_attr( $s['recaptcha_site_key'] ) . '" value="">';
+				} else {
+					wp_enqueue_script( 'google-recaptcha', 'https://www.google.com/recaptcha/api.js', array(), null, true ); // phpcs:ignore WordPress.WP.EnqueuedResourceParameters.MissingVersion
+					$html .= '<div class="sf-captcha g-recaptcha" data-sitekey="' . esc_attr( $s['recaptcha_site_key'] ) . '"></div>';
+				}
 				break;
 		}
 		return $html;
@@ -71,18 +76,25 @@ class Spiral_Forms_Spam {
 		$s = Spiral_Forms_Settings::all();
 		switch ( self::provider() ) {
 			case 'turnstile':
-				$ok = self::verify_remote(
+				$res = self::verify_remote(
 					'https://challenges.cloudflare.com/turnstile/v0/siteverify',
 					$s['turnstile_secret_key'],
 					$post['cf-turnstile-response'] ?? ''
 				);
+				$ok  = ! empty( $res['success'] );
 				break;
 			case 'recaptcha':
-				$ok = self::verify_remote(
+				$res = self::verify_remote(
 					'https://www.google.com/recaptcha/api/siteverify',
 					$s['recaptcha_secret_key'],
 					$post['g-recaptcha-response'] ?? ''
 				);
+				$ok  = ! empty( $res['success'] );
+				// v3: a valid token with a low score is a probable bot. Keep it as spam
+				// (reviewable) rather than showing a real person an error they can't fix.
+				if ( $ok && 'v3' === $s['recaptcha_type'] && isset( $res['score'] ) && (float) $res['score'] < (float) $s['recaptcha_threshold'] ) {
+					return 'spam';
+				}
 				break;
 			default:
 				$ok = true;
@@ -92,7 +104,7 @@ class Spiral_Forms_Spam {
 
 	private static function verify_remote( $url, $secret, $token ) {
 		if ( '' === (string) $token ) {
-			return false;
+			return array();
 		}
 		$res = wp_remote_post(
 			$url,
@@ -106,9 +118,9 @@ class Spiral_Forms_Spam {
 			)
 		);
 		if ( is_wp_error( $res ) ) {
-			return false;
+			return array();
 		}
 		$body = json_decode( wp_remote_retrieve_body( $res ), true );
-		return ! empty( $body['success'] );
+		return is_array( $body ) ? $body : array();
 	}
 }
