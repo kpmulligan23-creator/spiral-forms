@@ -131,12 +131,12 @@ class Spiral_Forms_Entries {
 	public static function purge_expired() {
 		global $wpdb;
 		$table = Spiral_Forms_Install::table();
-		$wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE status = 'spam' AND created_at < %s", gmdate( 'Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS ) ) ); // phpcs:ignore
+		self::delete_where( "status = 'spam' AND created_at < %s", array( gmdate( 'Y-m-d H:i:s', time() - 30 * DAY_IN_SECONDS ) ) );
 		foreach ( Spiral_Forms_Forms::all() as $p ) {
 			$form = Spiral_Forms_Forms::get( $p->ID );
 			$days = $form ? (int) $form['settings']['retention_days'] : 0;
 			if ( $days > 0 ) {
-				$wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE form_id = %d AND created_at < %s", $p->ID, gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS ) ) ); // phpcs:ignore
+				self::delete_where( 'form_id = %d AND created_at < %s', array( $p->ID, gmdate( 'Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS ) ) );
 			}
 		}
 	}
@@ -153,13 +153,31 @@ class Spiral_Forms_Entries {
 			return 0;
 		}
 		$table = Spiral_Forms_Install::table();
-		$ph    = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
+		foreach ( self::query( array( 'ids' => $ids, 'per_page' => 0, 'status' => 'any' ) )['items'] as $entry ) {
+			Spiral_Forms_Uploads::delete_entry_files( $entry );
+		}
+		$ph = implode( ',', array_fill( 0, count( $ids ), '%d' ) );
 		return $wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE id IN ({$ph})", $ids ) ); // phpcs:ignore
 	}
 
 	public static function delete_for_form( $form_id ) {
 		global $wpdb;
-		return $wpdb->delete( Spiral_Forms_Install::table(), array( 'form_id' => (int) $form_id ), array( '%d' ) );
+		$table = Spiral_Forms_Install::table();
+		do {
+			$ids = $wpdb->get_col( $wpdb->prepare( "SELECT id FROM {$table} WHERE form_id = %d LIMIT 500", $form_id ) ); // phpcs:ignore
+			self::delete( $ids );
+		} while ( $ids );
+		return true;
+	}
+
+	/** Delete matching rows in batches (so their files are removed too). */
+	private static function delete_where( $where_sql, array $vals ) {
+		global $wpdb;
+		$table = Spiral_Forms_Install::table();
+		do {
+			$ids = $wpdb->get_col( $wpdb->prepare( "SELECT id FROM {$table} WHERE {$where_sql} LIMIT 500", $vals ) ); // phpcs:ignore
+			self::delete( $ids );
+		} while ( $ids );
 	}
 
 	private static function hydrate( array $row ) {
@@ -174,6 +192,9 @@ class Spiral_Forms_Entries {
 	 * Value as a display string (arrays joined).
 	 */
 	public static function value_to_string( $value, $sep = ', ' ) {
-		return is_array( $value ) ? implode( $sep, $value ) : (string) $value;
+		if ( Spiral_Forms_Uploads::is_file_value( $value ) ) {
+			return implode( $sep, array_map( static function ( $r ) { return (string) ( $r['name'] ?? '' ); }, $value ) );
+		}
+		return is_array( $value ) ? implode( $sep, array_map( 'strval', array_filter( $value, 'is_scalar' ) ) ) : (string) $value;
 	}
 }

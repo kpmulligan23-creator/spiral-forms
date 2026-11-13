@@ -142,6 +142,32 @@
 		}
 	}
 
+	/* ---------- File checks (the server re-checks everything) ---------- */
+
+	function checkFiles( form ) {
+		var errors = {};
+		form.querySelectorAll( 'input[type="file"][data-max-bytes]' ).forEach( function ( input ) {
+			var wrap = input.closest( '[data-sf-field]' );
+			if ( ! wrap || wrap.hidden || ! input.files ) {
+				return;
+			}
+			var id = wrap.getAttribute( 'data-sf-field' );
+			var maxFiles = parseInt( input.getAttribute( 'data-max-files' ), 10 ) || 1;
+			var maxBytes = parseInt( input.getAttribute( 'data-max-bytes' ), 10 ) || 0;
+			if ( input.files.length > maxFiles ) {
+				errors[ id ] = ( cfg.i18n.tooMany || '' ).replace( '%d', maxFiles );
+				return;
+			}
+			for ( var i = 0; i < input.files.length; i++ ) {
+				if ( maxBytes && input.files[ i ].size > maxBytes ) {
+					errors[ id ] = ( cfg.i18n.tooBig || '' ).replace( '%s', input.files[ i ].name );
+					return;
+				}
+			}
+		} );
+		return errors;
+	}
+
 	/* ---------- Submit ---------- */
 
 	function send( form ) {
@@ -196,6 +222,11 @@
 			return;
 		}
 		clearErrors( form );
+		var fileErrors = checkFiles( form );
+		if ( Object.keys( fileErrors ).length ) {
+			showErrors( form, { errors: fileErrors, message: cfg.i18n.fix } );
+			return;
+		}
 		setBusy( form, true );
 
 		var v3 = form.querySelector( '.sf-recaptcha-v3' );

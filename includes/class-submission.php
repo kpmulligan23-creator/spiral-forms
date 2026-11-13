@@ -23,6 +23,10 @@ class Spiral_Forms_Submission {
 	 */
 	public static function ajax() {
 		// phpcs:disable WordPress.Security.NonceVerification.Missing
+		if ( empty( $_POST ) && ! empty( $_SERVER['CONTENT_LENGTH'] ) ) {
+			// PHP dropped the whole request because it exceeded post_max_size.
+			wp_send_json_error( array( 'message' => __( 'Your upload is too large for this site. Please send smaller or fewer files.', 'spiral-forms' ) ), 413 );
+		}
 		$form = Spiral_Forms_Forms::get( absint( $_POST['spiral_form_id'] ?? 0 ) );
 		if ( ! $form ) {
 			wp_send_json_error( array( 'message' => __( 'Form not found.', 'spiral-forms' ) ), 404 );
@@ -102,13 +106,20 @@ class Spiral_Forms_Submission {
 	 *
 	 * @return array { success: bool, errors: array, values: array, message?: string, entry_id?: int }
 	 */
-	public static function process( array $form, array $post ) {
-		$raw    = isset( $post['sf_fields'] ) && is_array( $post['sf_fields'] ) ? $post['sf_fields'] : array();
-		$errors = array();
-		$values = array();   // id => sanitized value (arrays for name/address parts), for re-rendering + conditions.
-		$data   = array();   // id => [ id, label, type, value ] for storage/notifications (visible fields only).
+	public static function process( array $form, array $post, $files = null ) {
+		$raw     = isset( $post['sf_fields'] ) && is_array( $post['sf_fields'] ) ? $post['sf_fields'] : array();
+		$files   = null === $files ? ( $_FILES['sf_files'] ?? null ) : $files; // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput
+		$errors  = array();
+		$values  = array();   // id => sanitized value (arrays for name/address parts), for re-rendering + conditions.
+		$data    = array();   // id => [ id, label, type, value ] for storage/notifications (visible fields only).
+		$pending = array();   // file field id => pending uploads.
 
 		foreach ( $form['fields'] as $f ) {
+			if ( 'file' === $f['type'] ) {
+				$pending[ $f['id'] ] = Spiral_Forms_Uploads::pending( $files, $f['id'] );
+				$values[ $f['id'] ]  = array_column( $pending[ $f['id'] ], 'name' );
+				continue;
+			}
 			$values[ $f['id'] ] = self::sanitize_value( $f, $raw[ $f['id'] ] ?? null );
 		}
 
@@ -117,7 +128,7 @@ class Spiral_Forms_Submission {
 				continue; // Hidden by show/hide rules: not validated, not stored, not emailed.
 			}
 			$value = $values[ $f['id'] ];
-			$error = self::validate_value( $f, $value );
+			$error = 'file' === $f['type'] ? Spiral_Forms_Uploads::validate( $f, $pending[ $f['id'] ] ) : self::validate_value( $f, $value );
 			if ( $error ) {
 				$errors[ $f['id'] ] = $error;
 			}
@@ -174,11 +185,26 @@ class Spiral_Forms_Submission {
 			'ip'       => $meta['ip'],
 		);
 
+		// Everything checks out: move uploads into private storage.
+		$stored = array();
+		foreach ( $pending as $fid => $list ) {
+			if ( isset( $data[ $fid ] ) && $list ) {
+				$data[ $fid ]['value'] = Spiral_Forms_Uploads::store( $list );
+				$stored                = array_merge( $stored, $data[ $fid ]['value'] );
+			}
+		}
+		$context['values'] = $data;
+
 		if ( ! empty( $form['settings']['store_entries'] ) ) {
 			$context['entry_id'] = Spiral_Forms_Entries::insert( $form['id'], $data, $meta );
 		}
 
 		self::send_notifications( $form, $context );
+
+		if ( empty( $form['settings']['store_entries'] ) && $stored ) {
+			// No entry to keep them with: files were only needed for the emails.
+			Spiral_Forms_Uploads::delete_entry_files( array( 'fields' => $data ) );
+		}
 
 		do_action( 'spiral_forms_submission_complete', $form, $data, $context['entry_id'], $context );
 
@@ -347,14 +373,31 @@ class Spiral_Forms_Submission {
 				$headers[] = 'Reply-To: ' . $reply[0];
 			}
 
+			$attachments = array();
+			if ( ! empty( $n['attach_files'] ) ) {
+				$total = 0;
+				foreach ( $context['values'] as $v ) {
+					if ( ! Spiral_Forms_Uploads::is_file_value( $v['value'] ) ) {
+						continue;
+					}
+					foreach ( $v['value'] as $rec ) {
+						$path = Spiral_Forms_Uploads::path( (array) $rec );
+						if ( $path && $total + filesize( $path ) <= 20 * MB_IN_BYTES ) {
+							$attachments[] = $path;
+							$total        += filesize( $path );
+						}
+					}
+				}
+			}
+
 			$args = apply_filters(
 				'spiral_forms_email_args',
-				compact( 'to', 'subject', 'body', 'headers' ),
+				compact( 'to', 'subject', 'body', 'headers', 'attachments' ),
 				$n,
 				$form,
 				$context
 			);
-			wp_mail( $args['to'], $args['subject'], $args['body'], $args['headers'] );
+			wp_mail( $args['to'], $args['subject'], $args['body'], $args['headers'], $args['attachments'] ?? array() );
 
 			if ( isset( $name_filter ) ) {
 				remove_filter( 'wp_mail_from_name', $name_filter );

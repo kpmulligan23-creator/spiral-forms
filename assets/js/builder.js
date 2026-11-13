@@ -71,8 +71,12 @@
 		if ( ty.options ) {
 			html += '<p><label>' + esc( t.options ) + '<br><textarea class="widefat" rows="5" data-key="options">' + esc( ( f.options || [] ).join( '\n' ) ) + '</textarea></label></p>';
 		}
-		if ( [ 'checkbox', 'radio', 'date', 'address' ].indexOf( f.type ) === -1 && ! ( f.type === 'name' && f.format === 'first-last' ) ) {
+		if ( [ 'checkbox', 'radio', 'date', 'address', 'file' ].indexOf( f.type ) === -1 && ! ( f.type === 'name' && f.format === 'first-last' ) ) {
 			html += input( 'placeholder', t.placeholder, f.placeholder );
+		}
+		if ( f.type === 'file' ) {
+			html += input( 'extensions', t.extensions, f.extensions || cfg.defaultExtensions );
+			html += '<div class="sf-row">' + input( 'max_size', t.maxSize, f.max_size, 'number' ) + input( 'max_files', t.maxFiles, f.max_files || 1, 'number' ) + '</div>';
 		}
 		if ( f.type === 'number' ) {
 			html += '<div class="sf-row">' + input( 'min', t.min, f.min, 'number' ) + input( 'max', t.max, f.max, 'number' ) + '</div>';
@@ -84,7 +88,7 @@
 				+ '<option value="first-last"' + ( f.format === 'first-last' ? ' selected' : '' ) + '>' + esc( t.nameFirstLast ) + '</option>'
 				+ '</select></label></p>';
 		}
-		if ( [ 'address' ].indexOf( f.type ) === -1 && ! ( f.type === 'name' && f.format === 'first-last' ) ) {
+		if ( [ 'address', 'file' ].indexOf( f.type ) === -1 && ! ( f.type === 'name' && f.format === 'first-last' ) ) {
 			html += input( 'default', t.default, f.default );
 		}
 		html += input( 'css_class', t.cssClass, f.css_class );
@@ -214,6 +218,9 @@
 			min: '',
 			max: '',
 			format: type === 'name' ? 'first-last' : '',
+			extensions: type === 'file' ? cfg.defaultExtensions : '',
+			max_size: type === 'file' ? 10 : '',
+			max_files: 1,
 			conditional: { enabled: 0, action: 'show', match: 'all', rules: [] },
 			_auto: true,
 		};
@@ -430,6 +437,9 @@
 				+ '<p><label>' + esc( t.message ) + '<br><textarea class="large-text" rows="7" data-n="' + i + '" data-nkey="message">' + esc( n.message ) + '</textarea></label>' + tagSelect( i, 'message' ) + '</p>'
 				+ '<div class="sf-row">' + nInput( i, 'from_name', t.fromName, n.from_name ) + nInput( i, 'from_email', t.fromEmail, n.from_email ) + '</div>'
 				+ '<div class="sf-with-tag">' + nInput( i, 'reply_to', t.replyTo, n.reply_to ) + tagSelect( i, 'reply_to' ) + '</div>'
+				+ ( state.fields.some( function ( f ) { return f.type === 'file'; } )
+					? '<p><label><input type="checkbox" data-n="' + i + '" data-nkey="attach_files"' + ( parseInt( n.attach_files, 10 ) ? ' checked' : '' ) + '> ' + esc( t.attachFiles ) + '</label></p>'
+					: '' )
 				+ '</div></div>';
 		} );
 		$( '#sf-notifications' ).html( html );

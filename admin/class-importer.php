@@ -146,6 +146,7 @@ class Spiral_Forms_Importer {
 			'address'       => 'address',
 			'url'           => 'text',
 			'gdpr-checkbox' => 'checkbox',
+			'file-upload'   => 'file',
 		);
 		$silent_skip = array( 'divider', 'html', 'content', 'pagebreak', 'captcha', 'internal-information', 'entry-preview' );
 
@@ -201,6 +202,9 @@ class Spiral_Forms_Importer {
 				'min'         => $wf['min'] ?? '',
 				'max'         => $wf['max'] ?? '',
 				'format'      => 'name' === $type && 'simple' !== ( $wf['format'] ?? 'first-last' ) ? 'first-last' : '',
+				'extensions'  => 'file-upload' === $type ? (string) ( $wf['extensions'] ?? '' ) : '',
+				'max_size'    => 'file-upload' === $type && is_numeric( $wf['max_size'] ?? '' ) ? $wf['max_size'] : '',
+				'max_files'   => 'file-upload' === $type ? max( 1, (int) ( $wf['max_file_number'] ?? 1 ) ) : 1,
 				'_wpf'        => $wf,
 			);
 			if ( 'name' === $type && 'first-middle-last' === ( $wf['format'] ?? '' ) ) {
@@ -306,8 +310,11 @@ class Spiral_Forms_Importer {
 				'from_email' => $tags( $n['sender_address'] ?? '' ),
 				'reply_to'   => $tags( $n['replyto'] ?? '' ),
 			);
-			if ( ! empty( $n['file_upload_attachment_fields'] ) || ! empty( $n['entry_csv_attachment_enable'] ) ) {
-				$warnings[] = __( 'Notification attachments are not supported yet and were left out.', 'spiral-forms' );
+			if ( ! empty( $n['file_upload_attachment_fields'] ) || ! empty( $n['file_upload_attachment_enable'] ) ) {
+				$notifs[ count( $notifs ) - 1 ]['attach_files'] = 1;
+			}
+			if ( ! empty( $n['entry_csv_attachment_enable'] ) ) {
+				$warnings[] = __( 'The "attach entry as CSV" email option is not supported and was left out.', 'spiral-forms' );
 			}
 			if ( ! empty( $n['conditional_logic'] ) ) {
 				/* translators: %s: notification name */
@@ -406,6 +413,32 @@ class Spiral_Forms_Importer {
 					$wid  = (string) ( $v['id'] ?? $wid );
 					$sid  = $map[ $wid ] ?? 'wpf_' . $wid;
 					$val  = $v['value'] ?? '';
+					if ( 'file-upload' === ( $v['type'] ?? '' ) ) {
+						// Keep pointing at the files WPForms already stored (wp-content/uploads/wpforms/…).
+						$recs = array();
+						if ( ! empty( $v['value_raw'] ) && is_array( $v['value_raw'] ) ) {
+							foreach ( $v['value_raw'] as $raw ) {
+								$raw = (array) $raw;
+								if ( ! empty( $raw['value'] ) ) {
+									$recs[] = array(
+										'name' => (string) ( $raw['file_original'] ?? ( $raw['name'] ?? wp_basename( $raw['value'] ) ) ),
+										'url'  => esc_url_raw( (string) $raw['value'] ),
+										'size' => (int) ( $raw['file_size'] ?? 0 ),
+									);
+								}
+							}
+						} elseif ( is_string( $val ) && '' !== $val ) {
+							foreach ( preg_split( '/\R/', $val ) as $u ) {
+								if ( '' !== trim( $u ) ) {
+									$recs[] = array(
+										'name' => wp_basename( wp_parse_url( trim( $u ), PHP_URL_PATH ) ),
+										'url'  => esc_url_raw( trim( $u ) ),
+									);
+								}
+							}
+						}
+						$val = $recs;
+					}
 					if ( 'checkbox' === ( $v['type'] ?? '' ) && is_string( $val ) && '' !== $val ) {
 						$val = array_map( 'trim', explode( "\n", $val ) );
 					}

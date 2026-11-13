@@ -236,7 +236,20 @@ class Spiral_Forms_Entries_Admin {
 							<?php $val = Spiral_Forms_Entries::value_to_string( $f['value'] ?? '', "\n" ); ?>
 							<tr>
 								<th scope="row"><?php echo esc_html( $f['label'] ?? $f['id'] ); ?></th>
-								<td><?php echo '' === $val ? '<em class="sf-muted">' . esc_html__( 'Empty', 'spiral-forms' ) . '</em>' : nl2br( esc_html( $val ) ); ?></td>
+								<td>
+									<?php
+									if ( Spiral_Forms_Uploads::is_file_value( $f['value'] ?? null ) ) {
+										foreach ( $f['value'] as $i => $rec ) {
+											$rec = (array) $rec;
+											echo '<a class="sf-file-link" href="' . esc_url( Spiral_Forms_Uploads::download_url( $id, $f['id'], $i, $rec ) ) . '"><span class="dashicons dashicons-download"></span> ' . esc_html( $rec['name'] ?? '' ) . '</a>'
+												. ( ! empty( $rec['size'] ) ? ' <span class="sf-muted">' . esc_html( size_format( $rec['size'] ) ) . '</span>' : '' )
+												. ( ! empty( $rec['file'] ) && ! Spiral_Forms_Uploads::path( $rec ) ? ' <em class="sf-muted">(' . esc_html__( 'file missing', 'spiral-forms' ) . ')</em>' : '' ) . '<br>';
+										}
+									} else {
+										echo '' === $val ? '<em class="sf-muted">' . esc_html__( 'Empty', 'spiral-forms' ) . '</em>' : nl2br( esc_html( $val ) );
+									}
+									?>
+								</td>
 							</tr>
 						<?php endforeach; ?>
 						</tbody>
@@ -366,6 +379,14 @@ class Spiral_Forms_Entries_Admin {
 		foreach ( $entries as $e ) {
 			$by_id = array();
 			foreach ( $e['fields'] as $f ) {
+				if ( Spiral_Forms_Uploads::is_file_value( $f['value'] ?? null ) ) {
+					$parts = array();
+					foreach ( $f['value'] as $i => $rec ) {
+						$parts[] = ( $rec['name'] ?? '' ) . ' (' . Spiral_Forms_Uploads::download_url( $e['id'], $f['id'], $i, (array) $rec ) . ')';
+					}
+					$by_id[ $f['id'] ?? '' ] = implode( "\n", $parts );
+					continue;
+				}
 				$by_id[ $f['id'] ?? '' ] = Spiral_Forms_Entries::value_to_string( $f['value'] ?? '' );
 			}
 			$row = array( $e['id'], get_date_from_gmt( $e['created_at'], 'Y-m-d H:i:s' ) );

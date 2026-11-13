@@ -2,10 +2,11 @@
 
 A lightweight WordPress forms plugin built to replace WPForms on Kevin's sites.
 
-## Features (v0.2)
+## Features (v0.3)
 
 - **Form builder** (Spiral Forms → Add New): add, edit, reorder (drag or arrows), duplicate, and remove fields
-- **Fields:** Name (one box, or first + last), Email, Phone, Single-line text, Paragraph, Dropdown, Checkboxes, Multiple choice, Number (min/max), Date, US Address
+- **Fields:** Name (one box, or first + last), Email, Phone, Single-line text, Paragraph, Dropdown, Checkboxes, Multiple choice, Number (min/max), Date, US Address, File Upload
+- **File uploads:** set the allowed types, size per file and number of files for each field. Files are **private**: they're stored under `uploads/spiral-forms/` in random folders with web access denied, and only a logged-in admin can download them (links appear in the entry and in the email). Each notification can optionally attach the files (20 MB total). Script and web file types are always blocked, and file contents are checked against the extension. Deleting an entry deletes its files. On Nginx hosts, the `.htaccess` block doesn't apply, but the folder names still can't be guessed
 - **Show/hide rules:** show or hide a field when other fields match (is, is not, contains, empty, not empty; all or any). Hidden fields are skipped by validation and left out of entries and emails
 - **No page reload on submit** (AJAX), with inline errors. Without JavaScript, the form posts normally
 - **Embed:** shortcode `[spiral_form id="123"]` or the **Spiral Form** block in the editor
@@ -64,7 +65,7 @@ On the site, with both plugins active:
 4. **Swap embeds.** This replaces `[wpforms id="…"]` and the WPForms block in posts and pages, including Avada elements, with the Spiral form. A revision is saved for each page, so you can undo. Purge LiteSpeed or other page caches afterwards.
 5. **Import new entries.** This picks up anything submitted to WPForms since the first import. Then deactivate WPForms.
 
-Not converted yet (shown as notes on the Import screen): file uploads, notification attachments, conditional notifications, multi-page forms, integrations (Constant Contact, Brevo…), invisible reCAPTCHA v2.
+Not converted yet (shown as notes on the Import screen): CSV email attachments, conditional notifications, multi-page forms, integrations (Constant Contact, Brevo…), invisible reCAPTCHA v2.
 
 ## Developer hooks
 
@@ -84,7 +85,7 @@ Deleting the plugin **keeps** forms and entries, so a reinstall loses nothing. T
 
 ## Roadmap
 
-- **Next:** file uploads (Gary Law docs form, spiral.tech quote form), Avada (Fusion) forms importer, notification attachments
+- **Next:** Avada (Fusion) forms importer, test on spiral.tech, then switch stonelawfl.com over
 - **Phase 2:** better drag-and-drop builder with live preview, multi-page forms, richer show/hide rules
 - **Phase 3:** webhooks, Mailchimp/email lists, Stripe, others as needed
 

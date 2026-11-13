@@ -49,6 +49,7 @@ class Spiral_Forms_Forms {
 				'number'   => array( 'label' => __( 'Number', 'spiral-forms' ), 'options' => false ),
 				'date'     => array( 'label' => __( 'Date', 'spiral-forms' ), 'options' => false ),
 				'address'  => array( 'label' => __( 'Address', 'spiral-forms' ), 'options' => false ),
+				'file'     => array( 'label' => __( 'File Upload', 'spiral-forms' ), 'options' => false ),
 			)
 		);
 	}
@@ -138,6 +139,9 @@ class Spiral_Forms_Forms {
 				'max'         => '',
 				'format'      => '',
 				'conditional' => array(),
+				'extensions'  => '',
+				'max_size'    => '',
+				'max_files'   => 1,
 			)
 		);
 	}
@@ -252,6 +256,9 @@ class Spiral_Forms_Forms {
 				'max'         => is_numeric( $f['max'] ) ? $f['max'] + 0 : '',
 				'format'      => 'name' === $type && 'first-last' === $f['format'] ? 'first-last' : '',
 				'conditional' => self::normalize_conditional( $f['conditional'] ),
+				'extensions'  => 'file' === $type ? implode( ',', Spiral_Forms_Uploads::extensions( array( 'extensions' => $f['extensions'] ) ) ) : '',
+				'max_size'    => 'file' === $type && is_numeric( $f['max_size'] ) && $f['max_size'] > 0 ? $f['max_size'] + 0 : '',
+				'max_files'   => 'file' === $type ? max( 1, min( 20, (int) $f['max_files'] ) ) : 1,
 			);
 		}
 
@@ -285,6 +292,7 @@ class Spiral_Forms_Forms {
 				'from_name'  => sanitize_text_field( $n['from_name'] ?? '' ),
 				'from_email' => sanitize_text_field( $n['from_email'] ?? '' ),
 				'reply_to'   => sanitize_text_field( $n['reply_to'] ?? '' ),
+				'attach_files' => empty( $n['attach_files'] ) ? 0 : 1,
 			);
 		}
 

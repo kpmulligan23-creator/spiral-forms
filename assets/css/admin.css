@@ -50,3 +50,4 @@
 .sf-cond-rule select, .sf-cond-rule input { max-width: 220px; }
 .sf-rule-del { color: #b32d2e !important; }
 .subsubsub .sf-count { color: #50575e; }
+.sf-file-link { text-decoration: none; } .sf-file-link .dashicons { vertical-align: text-bottom; }

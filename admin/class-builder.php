@@ -32,6 +32,7 @@ class Spiral_Forms_Builder {
 			array(
 				'types'     => $types,
 				'smartTags' => Spiral_Forms_Smart_Tags::available(),
+				'defaultExtensions' => Spiral_Forms_Uploads::DEFAULT_EXTENSIONS,
 				'i18n'      => array(
 					'label'        => __( 'Label', 'spiral-forms' ),
 					'fieldId'      => __( 'Field ID (used in smart tags)', 'spiral-forms' ),
@@ -61,6 +62,11 @@ class Spiral_Forms_Builder {
 					'newChoice'    => __( 'First choice', 'spiral-forms' ),
 					'insertTag'    => __( 'Insert field tag…', 'spiral-forms' ),
 					'nameFormat'   => __( 'Format', 'spiral-forms' ),
+					'extensions'   => __( 'Allowed file types (comma separated)', 'spiral-forms' ),
+					/* translators: %s: server upload limit */
+					'maxSize'      => sprintf( __( 'Max size per file, MB (server limit %s)', 'spiral-forms' ), size_format( wp_max_upload_size() ) ),
+					'maxFiles'     => __( 'Max number of files', 'spiral-forms' ),
+					'attachFiles'  => __( 'Attach uploaded files to this email (up to 20 MB total; links are always included)', 'spiral-forms' ),
 					'nameSimple'   => __( 'Single box', 'spiral-forms' ),
 					'nameFirstLast' => __( 'First and last name', 'spiral-forms' ),
 					'condEnable'   => __( 'Only show this field in some cases', 'spiral-forms' ),

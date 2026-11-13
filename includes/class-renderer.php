@@ -22,6 +22,11 @@ class Spiral_Forms_Renderer {
 				'i18n'    => array(
 					'error'   => __( 'Something went wrong. Please try again.', 'spiral-forms' ),
 					'sending' => __( 'Sending…', 'spiral-forms' ),
+					'fix'     => __( 'Please correct the errors below.', 'spiral-forms' ),
+					/* translators: %d: max number of files */
+					'tooMany' => __( 'Please upload no more than %d file(s).', 'spiral-forms' ),
+					/* translators: %s: file name */
+					'tooBig'  => __( '"%s" is too large.', 'spiral-forms' ),
 				),
 			)
 		);
@@ -62,7 +67,8 @@ class Spiral_Forms_Renderer {
 			<?php elseif ( $errors ) : ?>
 				<div class="sf-error-summary" role="alert"><?php esc_html_e( 'Please correct the errors below.', 'spiral-forms' ); ?></div>
 			<?php endif; ?>
-			<form class="sf-form" method="post" action="<?php echo esc_url( '#' . $dom_id ); ?>" novalidate>
+			<?php $multipart = in_array( 'file', array_column( $form['fields'], 'type' ), true ); ?>
+			<form class="sf-form" method="post" action="<?php echo esc_url( '#' . $dom_id ); ?>"<?php echo $multipart ? ' enctype="multipart/form-data"' : ''; ?> novalidate>
 				<input type="hidden" name="spiral_form_id" value="<?php echo esc_attr( $form['id'] ); ?>">
 				<?php
 				$current = array();
@@ -175,6 +181,25 @@ class Spiral_Forms_Renderer {
 					$html .= '<option value="' . esc_attr( $opt ) . '"' . selected( $str, $opt, false ) . '>' . esc_html( $opt ) . '</option>';
 				}
 				$html .= '</select>';
+				break;
+
+			case 'file':
+				$exts  = Spiral_Forms_Uploads::extensions( $f );
+				$max   = Spiral_Forms_Uploads::max_files( $f );
+				$bytes = Spiral_Forms_Uploads::max_bytes( $f );
+				$html .= '<input type="file" id="' . esc_attr( $id ) . '" name="' . esc_attr( 'sf_files[' . $f['id'] . '][]' ) . '"'
+					. ( $max > 1 ? ' multiple' : '' )
+					. ' accept="' . esc_attr( implode( ',', array_map( static function ( $e ) { return '.' . $e; }, $exts ) ) ) . '"'
+					. ' data-max-files="' . (int) $max . '" data-max-bytes="' . (int) $bytes . '"' . $aria . '>';
+				$html .= '<div class="sf-file-hint">' . esc_html(
+					sprintf(
+						/* translators: 1: file count, 2: size, 3: extensions */
+						_n( 'Up to %1$d file, %2$s max. Allowed: %3$s', 'Up to %1$d files, %2$s each. Allowed: %3$s', $max, 'spiral-forms' ),
+						$max,
+						size_format( $bytes ),
+						implode( ', ', $exts )
+					)
+				) . '</div>';
 				break;
 
 			case 'checkbox':
