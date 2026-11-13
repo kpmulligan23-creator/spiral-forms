@@ -71,16 +71,89 @@
 		if ( ty.options ) {
 			html += '<p><label>' + esc( t.options ) + '<br><textarea class="widefat" rows="5" data-key="options">' + esc( ( f.options || [] ).join( '\n' ) ) + '</textarea></label></p>';
 		}
-		if ( [ 'checkbox', 'radio', 'date' ].indexOf( f.type ) === -1 ) {
+		if ( [ 'checkbox', 'radio', 'date', 'address', 'file' ].indexOf( f.type ) === -1 && ! ( f.type === 'name' && f.format === 'first-last' ) ) {
 			html += input( 'placeholder', t.placeholder, f.placeholder );
+		}
+		if ( f.type === 'file' ) {
+			html += input( 'extensions', t.extensions, f.extensions || cfg.defaultExtensions );
+			html += '<div class="sf-row">' + input( 'max_size', t.maxSize, f.max_size, 'number' ) + input( 'max_files', t.maxFiles, f.max_files || 1, 'number' ) + '</div>';
 		}
 		if ( f.type === 'number' ) {
 			html += '<div class="sf-row">' + input( 'min', t.min, f.min, 'number' ) + input( 'max', t.max, f.max, 'number' ) + '</div>';
 		}
 		html += '<p><label>' + esc( t.description ) + '<br><textarea class="widefat" rows="2" data-key="description">' + esc( f.description ) + '</textarea></label></p>';
-		html += input( 'default', t.default, f.default );
+		if ( f.type === 'name' ) {
+			html += '<p><label>' + esc( t.nameFormat ) + '<br><select data-key="format">'
+				+ '<option value=""' + ( f.format !== 'first-last' ? ' selected' : '' ) + '>' + esc( t.nameSimple ) + '</option>'
+				+ '<option value="first-last"' + ( f.format === 'first-last' ? ' selected' : '' ) + '>' + esc( t.nameFirstLast ) + '</option>'
+				+ '</select></label></p>';
+		}
+		if ( [ 'address', 'file' ].indexOf( f.type ) === -1 && ! ( f.type === 'name' && f.format === 'first-last' ) ) {
+			html += input( 'default', t.default, f.default );
+		}
 		html += input( 'css_class', t.cssClass, f.css_class );
+		html += conditionalUI( f );
 		return html;
+	}
+
+	function conditionalUI( f ) {
+		var c = f.conditional || {};
+		var others = state.fields.filter( function ( o ) {
+			return o.id !== f.id;
+		} );
+		var html = '<div class="sf-cond">'
+			+ '<p><label><input type="checkbox" data-cond="enabled"' + ( c.enabled ? ' checked' : '' ) + ( others.length ? '' : ' disabled' ) + '> ' + esc( t.condEnable ) + '</label></p>';
+		if ( ! c.enabled ) {
+			return html + '</div>';
+		}
+		html += '<p class="sf-cond-head"><select data-cond="action">'
+			+ '<option value="show"' + ( c.action !== 'hide' ? ' selected' : '' ) + '>' + esc( t.condShow ) + '</option>'
+			+ '<option value="hide"' + ( c.action === 'hide' ? ' selected' : '' ) + '>' + esc( t.condHide ) + '</option>'
+			+ '</select> ' + esc( t.condWhen ) + ' <select data-cond="match">'
+			+ '<option value="all"' + ( c.match !== 'any' ? ' selected' : '' ) + '>' + esc( t.condAll ) + '</option>'
+			+ '<option value="any"' + ( c.match === 'any' ? ' selected' : '' ) + '>' + esc( t.condAny ) + '</option>'
+			+ '</select> ' + esc( t.condOfThese ) + '</p>';
+		( c.rules || [] ).forEach( function ( r, ri ) {
+			var target = state.fields.filter( function ( o ) {
+				return o.id === r.field;
+			} )[ 0 ];
+			html += '<div class="sf-cond-rule" data-rule="' + ri + '"><select data-rkey="field">';
+			others.forEach( function ( o ) {
+				html += '<option value="' + esc( o.id ) + '"' + ( o.id === r.field ? ' selected' : '' ) + '>' + esc( o.label || o.id ) + '</option>';
+			} );
+			html += '</select> <select data-rkey="operator">';
+			[ [ 'is', t.opIs ], [ 'is_not', t.opIsNot ], [ 'contains', t.opContains ], [ 'empty', t.opEmpty ], [ 'not_empty', t.opNotEmpty ] ].forEach( function ( op ) {
+				html += '<option value="' + op[ 0 ] + '"' + ( r.operator === op[ 0 ] ? ' selected' : '' ) + '>' + esc( op[ 1 ] ) + '</option>';
+			} );
+			html += '</select> ';
+			if ( r.operator !== 'empty' && r.operator !== 'not_empty' ) {
+				if ( target && target.options && target.options.length && r.operator !== 'contains' ) {
+					html += '<select data-rkey="value"><option value=""></option>';
+					target.options.forEach( function ( o ) {
+						html += '<option value="' + esc( o ) + '"' + ( o === r.value ? ' selected' : '' ) + '>' + esc( o ) + '</option>';
+					} );
+					html += '</select>';
+				} else {
+					html += '<input type="text" data-rkey="value" value="' + esc( r.value ) + '">';
+				}
+			}
+			html += ' <button type="button" class="button-link sf-rule-del" title="' + esc( t.remove ) + '"><span class="dashicons dashicons-no-alt"></span></button></div>';
+		} );
+		html += '<p><button type="button" class="button button-small sf-rule-add">' + esc( t.condAddRule ) + '</button></p></div>';
+		return html;
+	}
+
+	function rerenderBody( $card ) {
+		var f = state.fields[ $card.data( 'index' ) ];
+		$card.find( '.sf-field-body' ).html( fieldBody( f ) );
+		sync();
+	}
+
+	function newRule( f ) {
+		var other = state.fields.filter( function ( o ) {
+			return o.id !== f.id;
+		} )[ 0 ];
+		return { field: other ? other.id : '', operator: 'is', value: '' };
 	}
 
 	function renderFields() {
@@ -144,6 +217,11 @@
 			css_class: '',
 			min: '',
 			max: '',
+			format: type === 'name' ? 'first-last' : '',
+			extensions: type === 'file' ? cfg.defaultExtensions : '',
+			max_size: type === 'file' ? 10 : '',
+			max_files: 1,
+			conditional: { enabled: 0, action: 'show', match: 'all', rules: [] },
 			_auto: true,
 		};
 		state.fields.push( f );
@@ -186,6 +264,47 @@
 			openIndex = -1;
 			renderFields();
 		} )
+		.on( 'change', '[data-cond]', function () {
+			var $card = $( this ).closest( '.sf-field-card' );
+			var f = state.fields[ $card.data( 'index' ) ];
+			f.conditional = f.conditional && f.conditional.rules ? f.conditional : { enabled: 0, action: 'show', match: 'all', rules: [] };
+			var key = $( this ).data( 'cond' );
+			f.conditional[ key ] = this.type === 'checkbox' ? ( this.checked ? 1 : 0 ) : $( this ).val();
+			if ( key === 'enabled' && f.conditional.enabled && ! f.conditional.rules.length ) {
+				f.conditional.rules.push( newRule( f ) );
+			}
+			rerenderBody( $card );
+		} )
+		.on( 'input change', '[data-rkey]', function ( e ) {
+			var $card = $( this ).closest( '.sf-field-card' );
+			var f = state.fields[ $card.data( 'index' ) ];
+			var rule = f.conditional.rules[ $( this ).closest( '.sf-cond-rule' ).data( 'rule' ) ];
+			var key = $( this ).data( 'rkey' );
+			rule[ key ] = $( this ).val();
+			if ( key !== 'value' && e.type === 'change' ) {
+				if ( key === 'field' ) {
+					rule.value = '';
+				}
+				rerenderBody( $card );
+			} else {
+				sync();
+			}
+		} )
+		.on( 'click', '.sf-rule-add', function () {
+			var $card = $( this ).closest( '.sf-field-card' );
+			var f = state.fields[ $card.data( 'index' ) ];
+			f.conditional.rules.push( newRule( f ) );
+			rerenderBody( $card );
+		} )
+		.on( 'click', '.sf-rule-del', function () {
+			var $card = $( this ).closest( '.sf-field-card' );
+			var f = state.fields[ $card.data( 'index' ) ];
+			f.conditional.rules.splice( $( this ).closest( '.sf-cond-rule' ).data( 'rule' ), 1 );
+			if ( ! f.conditional.rules.length ) {
+				f.conditional.enabled = 0;
+			}
+			rerenderBody( $card );
+		} )
 		.on( 'input change', '[data-key]', function ( e ) {
 			var $card = $( this ).closest( '.sf-field-card' );
 			var i = $card.data( 'index' );
@@ -206,6 +325,10 @@
 				}
 			}
 			f[ key ] = val;
+			if ( key === 'format' ) {
+				rerenderBody( $card );
+				return;
+			}
 
 			if ( key === 'label' && f._auto ) {
 				f.id = uniqueId( slug( val ), i );
@@ -314,6 +437,9 @@
 				+ '<p><label>' + esc( t.message ) + '<br><textarea class="large-text" rows="7" data-n="' + i + '" data-nkey="message">' + esc( n.message ) + '</textarea></label>' + tagSelect( i, 'message' ) + '</p>'
 				+ '<div class="sf-row">' + nInput( i, 'from_name', t.fromName, n.from_name ) + nInput( i, 'from_email', t.fromEmail, n.from_email ) + '</div>'
 				+ '<div class="sf-with-tag">' + nInput( i, 'reply_to', t.replyTo, n.reply_to ) + tagSelect( i, 'reply_to' ) + '</div>'
+				+ ( state.fields.some( function ( f ) { return f.type === 'file'; } )
+					? '<p><label><input type="checkbox" data-n="' + i + '" data-nkey="attach_files"' + ( parseInt( n.attach_files, 10 ) ? ' checked' : '' ) + '> ' + esc( t.attachFiles ) + '</label></p>'
+					: '' )
 				+ '</div></div>';
 		} );
 		$( '#sf-notifications' ).html( html );

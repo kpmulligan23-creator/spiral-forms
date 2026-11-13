@@ -48,6 +48,8 @@ class Spiral_Forms_Forms {
 				'radio'    => array( 'label' => __( 'Multiple Choice', 'spiral-forms' ), 'options' => true ),
 				'number'   => array( 'label' => __( 'Number', 'spiral-forms' ), 'options' => false ),
 				'date'     => array( 'label' => __( 'Date', 'spiral-forms' ), 'options' => false ),
+				'address'  => array( 'label' => __( 'Address', 'spiral-forms' ), 'options' => false ),
+				'file'     => array( 'label' => __( 'File Upload', 'spiral-forms' ), 'options' => false ),
 			)
 		);
 	}
@@ -59,6 +61,8 @@ class Spiral_Forms_Forms {
 			'confirmation_message' => __( 'Thanks! Your message has been sent.', 'spiral-forms' ),
 			'redirect_url'         => '',
 			'store_entries'        => 1,
+			'store_spam'           => 1,
+			'retention_days'       => 0,
 			'css_class'            => '',
 			'notifications'        => array(
 				array(
@@ -133,8 +137,78 @@ class Spiral_Forms_Forms {
 				'css_class'   => '',
 				'min'         => '',
 				'max'         => '',
+				'format'      => '',
+				'conditional' => array(),
+				'extensions'  => '',
+				'max_size'    => '',
+				'max_files'   => 1,
 			)
 		);
+	}
+
+	/**
+	 * Normalize a field's show/hide rules.
+	 *
+	 * @return array { enabled, action: show|hide, match: all|any, rules: [ { field, operator: is|is_not|empty|not_empty, value } ] }
+	 */
+	public static function normalize_conditional( $c ) {
+		$c     = is_array( $c ) ? $c : array();
+		$rules = array();
+		foreach ( (array) ( $c['rules'] ?? array() ) as $r ) {
+			$r  = (array) $r;
+			$op = in_array( $r['operator'] ?? '', array( 'is', 'is_not', 'empty', 'not_empty', 'contains' ), true ) ? $r['operator'] : 'is';
+			if ( empty( $r['field'] ) ) {
+				continue;
+			}
+			$rules[] = array(
+				'field'    => sanitize_key( $r['field'] ),
+				'operator' => $op,
+				'value'    => sanitize_text_field( (string) ( $r['value'] ?? '' ) ),
+			);
+		}
+		return array(
+			'enabled' => ! empty( $c['enabled'] ) && $rules ? 1 : 0,
+			'action'  => ( $c['action'] ?? '' ) === 'hide' ? 'hide' : 'show',
+			'match'   => ( $c['match'] ?? '' ) === 'any' ? 'any' : 'all',
+			'rules'   => $rules,
+		);
+	}
+
+	/**
+	 * Is a field visible given the submitted values? Mirrors assets/js/forms.js.
+	 *
+	 * @param array $field  Normalized field.
+	 * @param array $values field id => value (string|array).
+	 */
+	public static function is_visible( array $field, array $values ) {
+		$c = self::normalize_conditional( $field['conditional'] );
+		if ( ! $c['enabled'] ) {
+			return true;
+		}
+		$results = array();
+		foreach ( $c['rules'] as $r ) {
+			$v    = $values[ $r['field'] ] ?? '';
+			$list = is_array( $v ) ? array_map( 'strval', $v ) : ( '' === (string) $v ? array() : array( (string) $v ) );
+			switch ( $r['operator'] ) {
+				case 'empty':
+					$ok = ! $list;
+					break;
+				case 'not_empty':
+					$ok = (bool) $list;
+					break;
+				case 'is_not':
+					$ok = ! in_array( $r['value'], $list, true );
+					break;
+				case 'contains':
+					$ok = false !== stripos( implode( ' ', $list ), $r['value'] );
+					break;
+				default:
+					$ok = in_array( $r['value'], $list, true );
+			}
+			$results[] = $ok;
+		}
+		$match = 'any' === $c['match'] ? in_array( true, $results, true ) : ! in_array( false, $results, true );
+		return 'show' === $c['action'] ? $match : ! $match;
 	}
 
 	/**
@@ -180,8 +254,30 @@ class Spiral_Forms_Forms {
 				'css_class'   => sanitize_html_class_list( $f['css_class'] ),
 				'min'         => is_numeric( $f['min'] ) ? $f['min'] + 0 : '',
 				'max'         => is_numeric( $f['max'] ) ? $f['max'] + 0 : '',
+				'format'      => 'name' === $type && 'first-last' === $f['format'] ? 'first-last' : '',
+				'conditional' => self::normalize_conditional( $f['conditional'] ),
+				'extensions'  => 'file' === $type ? implode( ',', Spiral_Forms_Uploads::extensions( array( 'extensions' => $f['extensions'] ) ) ) : '',
+				'max_size'    => 'file' === $type && is_numeric( $f['max_size'] ) && $f['max_size'] > 0 ? $f['max_size'] + 0 : '',
+				'max_files'   => 'file' === $type ? max( 1, min( 20, (int) $f['max_files'] ) ) : 1,
 			);
 		}
+
+		// Drop rules that point at missing fields or at the field itself.
+		$ids = array_column( $fields, 'id' );
+		foreach ( $fields as &$field ) {
+			$field['conditional']['rules'] = array_values(
+				array_filter(
+					$field['conditional']['rules'],
+					static function ( $r ) use ( $ids, $field ) {
+						return in_array( $r['field'], $ids, true ) && $r['field'] !== $field['id'];
+					}
+				)
+			);
+			if ( ! $field['conditional']['rules'] ) {
+				$field['conditional']['enabled'] = 0;
+			}
+		}
+		unset( $field );
 
 		$s        = wp_parse_args( (array) ( $data['settings'] ?? array() ), self::default_settings() );
 		$notifs   = array();
@@ -196,6 +292,7 @@ class Spiral_Forms_Forms {
 				'from_name'  => sanitize_text_field( $n['from_name'] ?? '' ),
 				'from_email' => sanitize_text_field( $n['from_email'] ?? '' ),
 				'reply_to'   => sanitize_text_field( $n['reply_to'] ?? '' ),
+				'attach_files' => empty( $n['attach_files'] ) ? 0 : 1,
 			);
 		}
 
@@ -205,6 +302,8 @@ class Spiral_Forms_Forms {
 			'confirmation_message' => wp_kses_post( $s['confirmation_message'] ),
 			'redirect_url'         => esc_url_raw( $s['redirect_url'] ),
 			'store_entries'        => empty( $s['store_entries'] ) ? 0 : 1,
+			'store_spam'           => empty( $s['store_spam'] ) ? 0 : 1,
+			'retention_days'       => max( 0, (int) $s['retention_days'] ),
 			'css_class'            => sanitize_html_class_list( $s['css_class'] ),
 			'notifications'        => $notifs,
 		);

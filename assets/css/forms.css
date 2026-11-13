@@ -66,3 +66,14 @@
 .sf-submit[disabled] { opacity: .6; cursor: wait; }
 .sf-hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; overflow: hidden; }
 .sf-captcha { margin: .25em 0; }
+.sf-field[hidden] { display: none !important; }
+.sf-parts { display: flex; flex-wrap: wrap; gap: .6em 2%; }
+.sf-part { box-sizing: border-box; }
+.sf-col-full { flex: 0 0 100%; }
+.sf-col-half { flex: 0 0 49%; }
+.sf-col-quarter { flex: 0 0 23.5%; }
+@media (max-width: 480px) { .sf-col-half, .sf-col-quarter { flex-basis: 100%; } }
+.sf-sublabel { display: block; font-size: .8em; opacity: .7; margin-top: .2em; font-weight: normal; }
+.sf-field fieldset .sf-parts + .sf-description { margin-top: .4em; }
+.sf-wrap input[type="file"] { display: block; max-width: 100%; padding: .4em 0; font: inherit; }
+.sf-file-hint { font-size: .85em; opacity: .7; margin-top: .2em; }

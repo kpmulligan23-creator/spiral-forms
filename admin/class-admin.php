@@ -16,6 +16,7 @@ class Spiral_Forms_Admin {
 		Spiral_Forms_Builder::init();
 		Spiral_Forms_Entries_Admin::init();
 		Spiral_Forms_Settings_Page::init();
+		Spiral_Forms_Importer::init();
 	}
 
 	public static function menu() {

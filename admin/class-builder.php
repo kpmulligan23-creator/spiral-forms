@@ -32,6 +32,7 @@ class Spiral_Forms_Builder {
 			array(
 				'types'     => $types,
 				'smartTags' => Spiral_Forms_Smart_Tags::available(),
+				'defaultExtensions' => Spiral_Forms_Uploads::DEFAULT_EXTENSIONS,
 				'i18n'      => array(
 					'label'        => __( 'Label', 'spiral-forms' ),
 					'fieldId'      => __( 'Field ID (used in smart tags)', 'spiral-forms' ),
@@ -60,6 +61,27 @@ class Spiral_Forms_Builder {
 					'notification' => __( 'Notification', 'spiral-forms' ),
 					'newChoice'    => __( 'First choice', 'spiral-forms' ),
 					'insertTag'    => __( 'Insert field tag…', 'spiral-forms' ),
+					'nameFormat'   => __( 'Format', 'spiral-forms' ),
+					'extensions'   => __( 'Allowed file types (comma separated)', 'spiral-forms' ),
+					/* translators: %s: server upload limit */
+					'maxSize'      => sprintf( __( 'Max size per file, MB (server limit %s)', 'spiral-forms' ), size_format( wp_max_upload_size() ) ),
+					'maxFiles'     => __( 'Max number of files', 'spiral-forms' ),
+					'attachFiles'  => __( 'Attach uploaded files to this email (up to 20 MB total; links are always included)', 'spiral-forms' ),
+					'nameSimple'   => __( 'Single box', 'spiral-forms' ),
+					'nameFirstLast' => __( 'First and last name', 'spiral-forms' ),
+					'condEnable'   => __( 'Only show this field in some cases', 'spiral-forms' ),
+					'condShow'     => __( 'Show', 'spiral-forms' ),
+					'condHide'     => __( 'Hide', 'spiral-forms' ),
+					'condWhen'     => __( 'this field when', 'spiral-forms' ),
+					'condAll'      => __( 'all', 'spiral-forms' ),
+					'condAny'      => __( 'any', 'spiral-forms' ),
+					'condOfThese'  => __( 'of these match:', 'spiral-forms' ),
+					'condAddRule'  => __( '+ Add rule', 'spiral-forms' ),
+					'opIs'         => __( 'is', 'spiral-forms' ),
+					'opIsNot'      => __( 'is not', 'spiral-forms' ),
+					'opContains'   => __( 'contains', 'spiral-forms' ),
+					'opEmpty'      => __( 'is empty', 'spiral-forms' ),
+					'opNotEmpty'   => __( 'is not empty', 'spiral-forms' ),
 				),
 			)
 		);
@@ -156,7 +178,14 @@ class Spiral_Forms_Builder {
 						</tr>
 						<tr>
 							<th><?php esc_html_e( 'Entries', 'spiral-forms' ); ?></th>
-							<td><label><input type="checkbox" data-setting="store_entries"> <?php esc_html_e( 'Save entries in the database', 'spiral-forms' ); ?></label></td>
+							<td>
+								<label><input type="checkbox" data-setting="store_entries"> <?php esc_html_e( 'Save entries in the database', 'spiral-forms' ); ?></label><br>
+								<label><input type="checkbox" data-setting="store_spam"> <?php esc_html_e( 'Keep blocked spam in Entries → Spam for 30 days (so a real lead flagged by mistake isn\'t lost)', 'spiral-forms' ); ?></label>
+							</td>
+						</tr>
+						<tr>
+							<th><label for="sf-s-retention_days"><?php esc_html_e( 'Delete entries after', 'spiral-forms' ); ?></label></th>
+							<td><input type="number" min="0" step="1" class="small-text" id="sf-s-retention_days" data-setting="retention_days"> <?php esc_html_e( 'days (0 = keep forever)', 'spiral-forms' ); ?></td>
 						</tr>
 						<tr>
 							<th><label for="sf-s-css_class"><?php esc_html_e( 'Form CSS classes', 'spiral-forms' ); ?></label></th>
