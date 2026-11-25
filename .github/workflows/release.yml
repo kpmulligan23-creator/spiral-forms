@@ -1,12 +1,20 @@
 name: Build release
 
-# Push a tag like v0.2.0 (matching the Version: header in spiral-forms.php)
-# and this builds spiral-forms.zip and attaches it to a GitHub Release.
-# Sites pick it up through the built-in updater.
+# Publish a GitHub Release named like v0.5.0 (matching the version in spiral-forms.php)
+# and this builds spiral-forms.zip and attaches it to that release. Sites pick it up
+# through the built-in updater.
+#
+# To (re)build the zip for a release that already exists, use Actions → Build release →
+# "Run workflow" and enter its tag (e.g. v0.4.0).
 
 on:
   push:
     tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to build (e.g. v0.4.0)'
+        required: true
 
 permissions:
   contents: write
@@ -14,28 +22,36 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      TAG_NAME: ${{ inputs.tag || github.ref_name }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG_NAME }}
 
       - name: Check version matches tag
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG="${TAG_NAME#v}"
           HEADER=$(grep -m1 -E '^\s*\*\s*Version:' spiral-forms.php | awk '{print $NF}')
-          CONST=$(grep -m1 "SPIRAL_FORMS_VERSION'," spiral-forms.php | sed -E "s/.*'([^']+)'\);/\1/")
+          CONST=$(grep -m1 -oE "SPIRAL_FORMS_VERSION'[[:space:]]*,[[:space:]]*'[^']+'" spiral-forms.php | sed -E "s/.*'([^']+)'$/\1/")
           echo "tag=$TAG header=$HEADER const=$CONST"
-          [ "$TAG" = "$HEADER" ] && [ "$TAG" = "$CONST" ] || { echo "::error::Version mismatch"; exit 1; }
+          if [ "$TAG" != "$HEADER" ] || [ "$TAG" != "$CONST" ]; then
+            echo "::error::Version mismatch: release is $TAG but spiral-forms.php says header=$HEADER, constant=$CONST"
+            exit 1
+          fi
 
       - name: Lint PHP
         run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l
 
       - name: Build zip
         run: |
-          mkdir -p build/spiral-forms
-          rsync -a --exclude-from=.distignore ./ build/spiral-forms/
-          cd build && zip -rq spiral-forms.zip spiral-forms
+          mkdir -p build
+          git archive --format=zip --prefix=spiral-forms/ -o build/spiral-forms.zip HEAD -- . ':!.github' ':!.gitignore' ':!.distignore'
+          unzip -l build/spiral-forms.zip | tail -1
 
-      - name: Publish release
+      - name: Attach zip to release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG_NAME }}
           files: build/spiral-forms.zip
-          generate_release_notes: true
+          fail_on_unmatched_files: true
