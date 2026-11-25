@@ -44,7 +44,7 @@ class Spiral_Forms_Smart_Tags {
 		);
 
 		if ( false !== strpos( $text, '{all_fields}' ) ) {
-			$text = str_replace( '{all_fields}', self::all_fields( $values, $html ), $text );
+			$text = str_replace( '{all_fields}', self::all_fields( $values, $html, (int) ( $context['entry_id'] ?? 0 ) ), $text );
 		}
 
 		$map = array(
@@ -64,10 +64,21 @@ class Spiral_Forms_Smart_Tags {
 		return strtr( $text, $map );
 	}
 
-	private static function all_fields( array $values, $html ) {
+	private static function all_fields( array $values, $html, $entry_id = 0 ) {
 		$out = '';
 		foreach ( $values as $v ) {
 			$val = Spiral_Forms_Entries::value_to_string( $v['value'] );
+			if ( $html && Spiral_Forms_Uploads::is_file_value( $v['value'] ) ) {
+				$links = array();
+				foreach ( $v['value'] as $i => $rec ) {
+					$url     = $entry_id || ! empty( $rec['url'] ) ? Spiral_Forms_Uploads::download_url( $entry_id, $v['id'], $i, (array) $rec ) : '';
+					$label   = esc_html( $rec['name'] ) . ( ! empty( $rec['size'] ) ? ' <span style="color:#888">(' . esc_html( size_format( $rec['size'] ) ) . ')</span>' : '' );
+					$links[] = $url ? '<a href="' . esc_url( $url ) . '">' . $label . '</a>' : $label;
+				}
+				$out .= '<tr><th align="left" valign="top" style="padding:8px 12px;background:#f6f7f7;border-bottom:1px solid #e2e4e7;">' . esc_html( $v['label'] ) . '</th>'
+					. '<td style="padding:8px 12px;border-bottom:1px solid #e2e4e7;">' . implode( '<br>', $links ) . ( $entry_id ? '<br><span style="color:#888;font-size:12px">' . esc_html__( 'Log in to WordPress to download.', 'spiral-forms' ) . '</span>' : '' ) . '</td></tr>';
+				continue;
+			}
 			if ( $html ) {
 				$out .= '<tr><th align="left" valign="top" style="padding:8px 12px;background:#f6f7f7;border-bottom:1px solid #e2e4e7;">' . esc_html( $v['label'] ) . '</th>'
 					. '<td style="padding:8px 12px;border-bottom:1px solid #e2e4e7;">' . ( '' === $val ? '<em style="color:#888">—</em>' : nl2br( esc_html( $val ) ) ) . '</td></tr>';

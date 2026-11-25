@@ -6,7 +6,7 @@ defined( 'ABSPATH' ) || exit;
  */
 class Spiral_Forms_Install {
 
-	const DB_VERSION = '1';
+	const DB_VERSION = '2';
 
 	public static function table() {
 		global $wpdb;
@@ -16,6 +16,13 @@ class Spiral_Forms_Install {
 	public static function activate() {
 		self::create_tables();
 		update_option( 'spiral_forms_db_version', self::DB_VERSION );
+		if ( ! wp_next_scheduled( 'spiral_forms_daily' ) ) {
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'spiral_forms_daily' );
+		}
+	}
+
+	public static function deactivate() {
+		wp_clear_scheduled_hook( 'spiral_forms_daily' );
 	}
 
 	public static function maybe_upgrade() {
@@ -37,6 +44,7 @@ class Spiral_Forms_Install {
 				form_id bigint(20) unsigned NOT NULL,
 				fields longtext NOT NULL,
 				is_read tinyint(1) NOT NULL DEFAULT 0,
+				status varchar(20) NOT NULL DEFAULT '',
 				ip varchar(100) NOT NULL DEFAULT '',
 				user_agent varchar(255) NOT NULL DEFAULT '',
 				page_url varchar(2048) NOT NULL DEFAULT '',
@@ -44,6 +52,7 @@ class Spiral_Forms_Install {
 				created_at datetime NOT NULL,
 				PRIMARY KEY  (id),
 				KEY form_id (form_id),
+				KEY status (status),
 				KEY created_at (created_at)
 			) {$charset};"
 		);

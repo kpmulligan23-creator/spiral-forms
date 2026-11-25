@@ -14,6 +14,22 @@ class Spiral_Forms_Renderer {
 	public static function register_assets() {
 		wp_register_style( 'spiral-forms', SPIRAL_FORMS_URL . 'assets/css/forms.css', array(), SPIRAL_FORMS_VERSION );
 		wp_register_script( 'spiral-forms', SPIRAL_FORMS_URL . 'assets/js/forms.js', array(), SPIRAL_FORMS_VERSION, true );
+		wp_localize_script(
+			'spiral-forms',
+			'SpiralForms',
+			array(
+				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+				'i18n'    => array(
+					'error'   => __( 'Something went wrong. Please try again.', 'spiral-forms' ),
+					'sending' => __( 'Sending…', 'spiral-forms' ),
+					'fix'     => __( 'Please correct the errors below.', 'spiral-forms' ),
+					/* translators: %d: max number of files */
+					'tooMany' => __( 'Please upload no more than %d file(s).', 'spiral-forms' ),
+					/* translators: %s: file name */
+					'tooBig'  => __( '"%s" is too large.', 'spiral-forms' ),
+				),
+			)
+		);
 	}
 
 	public static function shortcode( $atts ) {
@@ -45,19 +61,32 @@ class Spiral_Forms_Renderer {
 
 		ob_start();
 		?>
-		<div id="<?php echo esc_attr( $dom_id ); ?>" class="sf-wrap <?php echo esc_attr( $form['settings']['css_class'] ); ?>">
+		<?php
+		$hide_labels = 'hidden' === $form['settings']['label_display'];
+		$style       = self::style_vars( $form['settings'] );
+		?>
+		<div id="<?php echo esc_attr( $dom_id ); ?>" class="sf-wrap<?php echo $hide_labels ? ' sf-labels-hidden' : ''; ?> <?php echo esc_attr( $form['settings']['css_class'] ); ?>"<?php echo $style ? ' style="' . esc_attr( $style ) . '"' : ''; ?>>
 			<?php if ( ! empty( $errors['_form'] ) ) : ?>
 				<div class="sf-error-summary" role="alert"><?php echo esc_html( $errors['_form'] ); ?></div>
 			<?php elseif ( $errors ) : ?>
 				<div class="sf-error-summary" role="alert"><?php esc_html_e( 'Please correct the errors below.', 'spiral-forms' ); ?></div>
 			<?php endif; ?>
-			<form class="sf-form" method="post" action="<?php echo esc_url( '#' . $dom_id ); ?>" novalidate>
+			<?php $multipart = in_array( 'file', array_column( $form['fields'], 'type' ), true ); ?>
+			<form class="sf-form" method="post" action="<?php echo esc_url( '#' . $dom_id ); ?>"<?php echo $multipart ? ' enctype="multipart/form-data"' : ''; ?> novalidate>
 				<input type="hidden" name="spiral_form_id" value="<?php echo esc_attr( $form['id'] ); ?>">
 				<?php
+				$current = array();
 				foreach ( $form['fields'] as $field ) {
-					$has   = array_key_exists( $field['id'], $values );
-					$value = $has ? $values[ $field['id'] ] : self::default_value( $field );
-					echo self::render_field( $form['id'], $field, $value, $errors[ $field['id'] ] ?? '' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					$has                     = array_key_exists( $field['id'], $values );
+					$current[ $field['id'] ] = $has ? $values[ $field['id'] ] : self::default_value( $field );
+				}
+				$flat = array();
+				foreach ( $current as $k => $v ) {
+					$flat[ $k ] = is_array( $v ) && ! wp_is_numeric_array( $v ) ? trim( implode( ' ', array_filter( $v, 'strlen' ) ) ) : $v;
+				}
+				foreach ( $form['fields'] as $field ) {
+					$visible = Spiral_Forms_Forms::is_visible( $field, $flat );
+					echo self::render_field( $form['id'], $field, $current[ $field['id'] ], $errors[ $field['id'] ] ?? '', $visible, $hide_labels ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 				}
 				echo Spiral_Forms_Spam::render_fields( $form['id'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 				?>
@@ -70,14 +99,40 @@ class Spiral_Forms_Renderer {
 		return ob_get_clean();
 	}
 
+	/**
+	 * Per-form colors as CSS custom properties (empty = theme/default look).
+	 */
+	private static function style_vars( array $s ) {
+		$map = array(
+			'label_color'  => '--sf-label-color',
+			'field_bg'     => '--sf-field-bg',
+			'field_text'   => '--sf-field-text',
+			'field_border' => '--sf-field-border',
+			'button_bg'    => '--sf-button-bg',
+			'button_text'  => '--sf-button-text',
+		);
+		$css = '';
+		foreach ( $map as $key => $var ) {
+			$color = sanitize_hex_color( $s[ $key ] ?? '' );
+			if ( $color ) {
+				$css .= $var . ':' . $color . ';';
+			}
+		}
+		return $css;
+	}
+
 	private static function default_value( array $field ) {
+		$parts = Spiral_Forms_Submission::parts( $field );
+		if ( $parts ) {
+			return array_fill_keys( $parts, '' );
+		}
 		if ( 'checkbox' === $field['type'] ) {
 			return '' === $field['default'] ? array() : array_map( 'trim', explode( ',', $field['default'] ) );
 		}
 		return $field['default'];
 	}
 
-	private static function render_field( $form_id, array $f, $value, $error ) {
+	private static function render_field( $form_id, array $f, $value, $error, $visible = true, $hide_labels = false ) {
 		$id       = 'sf-' . $form_id . '-' . $f['id'];
 		$name     = 'sf_fields[' . $f['id'] . ']';
 		$required = ! empty( $f['required'] );
@@ -87,35 +142,96 @@ class Spiral_Forms_Renderer {
 		$aria     = ( $describe ? ' aria-describedby="' . esc_attr( $describe ) . '"' : '' )
 			. ( $error ? ' aria-invalid="true"' : '' )
 			. ( $required ? ' required aria-required="true"' : '' );
-		$ph       = $f['placeholder'] ? ' placeholder="' . esc_attr( $f['placeholder'] ) . '"' : '';
-		$is_group = in_array( $f['type'], array( 'checkbox', 'radio' ), true );
+		$parts    = Spiral_Forms_Submission::parts( $f );
+		// "Hidden" labels move inside the box as placeholders. Choices, dates and uploads
+		// have no box to put text in, so their labels stay visible.
+		$inside   = $hide_labels && ! in_array( $f['type'], array( 'checkbox', 'radio', 'date', 'file' ), true );
+		$ph_text  = $f['placeholder'] ? $f['placeholder'] : ( $inside ? $f['label'] : '' );
+		$ph       = '' !== $ph_text ? ' placeholder="' . esc_attr( $ph_text ) . '"' : '';
+		$lbl_cls  = 'sf-label' . ( $inside ? ' sf-sr-only' : '' );
+		$is_group = in_array( $f['type'], array( 'checkbox', 'radio' ), true ) || $parts;
 
 		$classes = 'sf-field sf-field-' . $f['type'] . ( $error ? ' sf-has-error' : '' ) . ( $f['css_class'] ? ' ' . $f['css_class'] : '' );
 		$star    = $required ? ' <span class="sf-required" aria-hidden="true">*</span>' : '';
 		$label   = esc_html( $f['label'] ) . $star;
 
-		$html = '<div class="' . esc_attr( $classes ) . '">';
+		$cond  = Spiral_Forms_Forms::normalize_conditional( $f['conditional'] );
+		$attrs = ' data-sf-field="' . esc_attr( $f['id'] ) . '"';
+		if ( $cond['enabled'] ) {
+			$attrs .= ' data-sf-cond="' . esc_attr( wp_json_encode( $cond ) ) . '"';
+		}
+		if ( ! $visible ) {
+			$attrs .= ' hidden';
+		}
+		$html = '<div class="' . esc_attr( $classes ) . '"' . $attrs . '>';
 
 		if ( $is_group ) {
-			$html .= '<fieldset' . ( $describe ? ' aria-describedby="' . esc_attr( $describe ) . '"' : '' ) . '><legend class="sf-label">' . $label . '</legend>';
+			$html .= '<fieldset' . ( $describe ? ' aria-describedby="' . esc_attr( $describe ) . '"' : '' ) . '><legend class="' . esc_attr( $lbl_cls ) . '">' . $label . '</legend>';
 		} else {
-			$html .= '<label class="sf-label" for="' . esc_attr( $id ) . '">' . $label . '</label>';
+			$html .= '<label class="' . esc_attr( $lbl_cls ) . '" for="' . esc_attr( $id ) . '">' . $label . '</label>';
 		}
 
 		$str = is_array( $value ) ? '' : (string) $value;
 
-		switch ( $f['type'] ) {
+		if ( $parts ) {
+			$value  = is_array( $value ) ? $value : array();
+			$labels = array(
+				'first'    => array( __( 'First Name', 'spiral-forms' ), 'given-name', 'sf-col-half' ),
+				'last'     => array( __( 'Last Name', 'spiral-forms' ), 'family-name', 'sf-col-half' ),
+				'address1' => array( __( 'Address Line 1', 'spiral-forms' ), 'address-line1', 'sf-col-full' ),
+				'address2' => array( __( 'Address Line 2', 'spiral-forms' ), 'address-line2', 'sf-col-full' ),
+				'city'     => array( __( 'City', 'spiral-forms' ), 'address-level2', 'sf-col-half' ),
+				'state'    => array( __( 'State', 'spiral-forms' ), 'address-level1', 'sf-col-quarter' ),
+				'postal'   => array( __( 'ZIP Code', 'spiral-forms' ), 'postal-code', 'sf-col-quarter' ),
+			);
+			$html .= '<div class="sf-parts">';
+			foreach ( $parts as $p ) {
+				$pid   = $id . '-' . $p;
+				$req   = $required && 'address2' !== $p;
+				$html .= '<div class="sf-part ' . esc_attr( $labels[ $p ][2] ) . '">'
+					. '<input type="text" id="' . esc_attr( $pid ) . '" name="' . esc_attr( $name . '[' . $p . ']' ) . '" value="' . esc_attr( $value[ $p ] ?? '' ) . '" autocomplete="' . esc_attr( $labels[ $p ][1] ) . '"'
+					. ( 'state' === $p ? ' maxlength="2"' : '' ) . ( 'postal' === $p ? ' inputmode="numeric"' : '' )
+					. ( $req ? ' required aria-required="true"' : '' ) . ( $error ? ' aria-invalid="true"' : '' )
+					. ( $inside ? ' placeholder="' . esc_attr( $labels[ $p ][0] ) . '"' : '' ) . '>'
+					. '<label class="sf-sublabel' . ( $inside ? ' sf-sr-only' : '' ) . '" for="' . esc_attr( $pid ) . '">' . esc_html( $labels[ $p ][0] ) . '</label></div>';
+			}
+			$html .= '</div>';
+		}
+
+		switch ( $parts ? '_parts' : $f['type'] ) {
+			case '_parts':
+				break;
+
 			case 'textarea':
 				$html .= '<textarea id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '" rows="5"' . $ph . $aria . '>' . esc_textarea( $str ) . '</textarea>';
 				break;
 
 			case 'select':
 				$html .= '<select id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '"' . $aria . '>';
-				$html .= '<option value="">' . esc_html( $f['placeholder'] ? $f['placeholder'] : __( '— Select —', 'spiral-forms' ) ) . '</option>';
+				$html .= '<option value="">' . esc_html( '' !== $ph_text ? $ph_text : __( '— Select —', 'spiral-forms' ) ) . '</option>';
 				foreach ( $f['options'] as $opt ) {
 					$html .= '<option value="' . esc_attr( $opt ) . '"' . selected( $str, $opt, false ) . '>' . esc_html( $opt ) . '</option>';
 				}
 				$html .= '</select>';
+				break;
+
+			case 'file':
+				$exts  = Spiral_Forms_Uploads::extensions( $f );
+				$max   = Spiral_Forms_Uploads::max_files( $f );
+				$bytes = Spiral_Forms_Uploads::max_bytes( $f );
+				$html .= '<input type="file" id="' . esc_attr( $id ) . '" name="' . esc_attr( 'sf_files[' . $f['id'] . '][]' ) . '"'
+					. ( $max > 1 ? ' multiple' : '' )
+					. ' accept="' . esc_attr( implode( ',', array_map( static function ( $e ) { return '.' . $e; }, $exts ) ) ) . '"'
+					. ' data-max-files="' . (int) $max . '" data-max-bytes="' . (int) $bytes . '"' . $aria . '>';
+				$html .= '<div class="sf-file-hint">' . esc_html(
+					sprintf(
+						/* translators: 1: file count, 2: size, 3: extensions */
+						_n( 'Up to %1$d file, %2$s max. Allowed: %3$s', 'Up to %1$d files, %2$s each. Allowed: %3$s', $max, 'spiral-forms' ),
+						$max,
+						size_format( $bytes ),
+						implode( ', ', $exts )
+					)
+				) . '</div>';
 				break;
 
 			case 'checkbox':

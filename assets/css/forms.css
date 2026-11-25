@@ -1,4 +1,5 @@
-/* Spiral Forms — front-end styles. Inherits theme fonts/colors; override with --sf-* variables. */
+/* Spiral Forms — front-end styles. Inherits theme fonts. Colors come from --sf-* variables,
+   which each form's Appearance settings set inline on .sf-wrap (empty = defaults below). */
 .sf-wrap {
 	--sf-accent: #2563eb;
 	--sf-border: #c3c4c7;
@@ -10,7 +11,13 @@
 .sf-form { display: flex; flex-direction: column; gap: 1.1em; }
 .sf-field { margin: 0; }
 .sf-field fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
-.sf-label { display: block; font-weight: 600; margin: 0 0 .35em; padding: 0; }
+.sf-label { display: block; font-weight: 600; margin: 0 0 .35em; padding: 0; color: var(--sf-label-color, inherit); }
+.sf-sublabel, .sf-choice, .sf-description, .sf-file-hint { color: var(--sf-label-color, inherit); }
+/* Visually hidden but still read by screen readers (used when labels are shown as placeholders). */
+.sf-wrap .sf-sr-only {
+	position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+	overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
 .sf-required { color: var(--sf-error); }
 .sf-wrap input[type="text"],
 .sf-wrap input[type="email"],
@@ -22,13 +29,16 @@
 	box-sizing: border-box;
 	width: 100%;
 	padding: .6em .75em;
-	border: 1px solid var(--sf-border);
+	border: 1px solid var(--sf-field-border, var(--sf-border));
 	border-radius: var(--sf-radius);
 	font: inherit;
 	line-height: 1.4;
-	background: #fff;
-	color: inherit;
+	background: var(--sf-field-bg, #fff);
+	/* Dark by default (not the page's text color) so typing stays readable on dark sections. */
+	color: var(--sf-field-text, #1e1e1e);
 }
+.sf-wrap input::placeholder,
+.sf-wrap textarea::placeholder { color: var(--sf-field-text, #1e1e1e); opacity: .7; }
 .sf-wrap input:focus, .sf-wrap select:focus, .sf-wrap textarea:focus {
 	outline: 2px solid var(--sf-accent);
 	outline-offset: 0;
@@ -57,8 +67,8 @@
 	padding: .7em 1.6em;
 	border: 0;
 	border-radius: var(--sf-radius);
-	background: var(--sf-accent);
-	color: #fff;
+	background: var(--sf-button-bg, var(--sf-accent));
+	color: var(--sf-button-text, #fff);
 	font: inherit;
 	font-weight: 600;
 }
@@ -66,3 +76,14 @@
 .sf-submit[disabled] { opacity: .6; cursor: wait; }
 .sf-hp { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; overflow: hidden; }
 .sf-captcha { margin: .25em 0; }
+.sf-field[hidden] { display: none !important; }
+.sf-parts { display: flex; flex-wrap: wrap; gap: .6em 2%; }
+.sf-part { box-sizing: border-box; }
+.sf-col-full { flex: 0 0 100%; }
+.sf-col-half { flex: 0 0 49%; }
+.sf-col-quarter { flex: 0 0 23.5%; }
+@media (max-width: 480px) { .sf-col-half, .sf-col-quarter { flex-basis: 100%; } }
+.sf-sublabel { display: block; font-size: .8em; opacity: .8; margin-top: .2em; font-weight: normal; }
+.sf-field fieldset .sf-parts + .sf-description { margin-top: .4em; }
+.sf-wrap input[type="file"] { display: block; max-width: 100%; padding: .4em 0; font: inherit; }
+.sf-file-hint { font-size: .85em; opacity: .7; margin-top: .2em; }

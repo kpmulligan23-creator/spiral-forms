@@ -15,6 +15,8 @@ class Spiral_Forms_Settings {
 			'turnstile_secret_key' => '',
 			'recaptcha_site_key'   => '',
 			'recaptcha_secret_key' => '',
+			'recaptcha_type'       => 'v2', // v2 (checkbox) | v3 (invisible, score).
+			'recaptcha_threshold'  => 0.5,
 			'github_token'         => '',
 			'load_css'             => 1,
 		);
