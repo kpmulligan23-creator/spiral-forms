@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Spiral Forms
  * Description:       Lightweight forms builder: fields, validation, email notifications, entries, CSV export, spam protection.
- * Version:           0.3.0
+ * Version:           0.4.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Kevin Mulligan
@@ -12,7 +12,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'SPIRAL_FORMS_VERSION', '0.3.0' );
+define( 'SPIRAL_FORMS_VERSION', '0.4.0' );
 define( 'SPIRAL_FORMS_FILE', __FILE__ );
 define( 'SPIRAL_FORMS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SPIRAL_FORMS_URL', plugin_dir_url( __FILE__ ) );

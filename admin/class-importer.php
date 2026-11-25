@@ -347,6 +347,23 @@ class Spiral_Forms_Importer {
 			'notifications'        => $notifs,
 		);
 
+		// WPForms "custom theme" colors → Appearance. Only label and button colors: field colors
+		// in WPForms themes are often overridden by the site's CSS, so copying them can backfire
+		// (e.g. white text on a white box).
+		$theme = (array) ( $ws['themes'] ?? array() );
+		if ( ! empty( $theme['isCustomTheme'] ) ) {
+			foreach ( array(
+				'labelColor'            => 'label_color',
+				'buttonBackgroundColor' => 'button_bg',
+				'buttonTextColor'       => 'button_text',
+			) as $from => $to ) {
+				$hex = sanitize_hex_color( (string) ( $theme[ $from ] ?? '' ) );
+				if ( $hex ) {
+					$settings[ $to ] = $hex;
+				}
+			}
+		}
+
 		$providers = array_filter( (array) ( $wpf['providers'] ?? array() ) );
 		if ( $providers ) {
 			/* translators: %s: integration names */

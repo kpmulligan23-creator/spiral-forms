@@ -382,6 +382,31 @@
 			}
 		} );
 		toggleConfirm();
+		initColorPickers();
+	}
+
+	// WordPress color picker for the Appearance colors. Empty = keep the theme/default color.
+	function initColorPickers() {
+		if ( ! $.fn.wpColorPicker ) {
+			return; // Falls back to a plain text box (#hex).
+		}
+		$( '.sf-color' ).each( function () {
+			var $input = $( this );
+			var key = $input.data( 'setting' );
+			if ( $input.closest( '.wp-picker-container' ).length ) {
+				return;
+			}
+			$input.wpColorPicker( {
+				change: function ( e, ui ) {
+					state.settings[ key ] = ui.color.toString();
+					sync();
+				},
+				clear: function () {
+					state.settings[ key ] = '';
+					sync();
+				},
+			} );
+		} );
 	}
 
 	function toggleConfirm() {

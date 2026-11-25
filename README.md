@@ -2,7 +2,7 @@
 
 A lightweight WordPress forms plugin built to replace WPForms on Kevin's sites.
 
-## Features (v0.3)
+## Features (v0.4)
 
 - **Form builder** (Spiral Forms → Add New): add, edit, reorder (drag or arrows), duplicate, and remove fields
 - **Fields:** Name (one box, or first + last), Email, Phone, Single-line text, Paragraph, Dropdown, Checkboxes, Multiple choice, Number (min/max), Date, US Address, File Upload
@@ -76,6 +76,8 @@ Not converted yet (shown as notes on the Import screen): CSV email attachments, 
 | `spiral_forms_email_args` | filter `( $args, $notification, $form, $context )` | Change outgoing emails |
 | `spiral_forms_field_types` | filter | Register field types |
 | `spiral_forms_client_ip` | filter | Change how the IP is detected |
+
+**Appearance (per form, Settings tab):** show labels above each field, or hide them and show the label text inside the box instead (the field's own placeholder wins if it has one; name fields show "First Name" / "Last Name"; screen readers still get the labels). Colors can be set for labels, field background, field text and placeholder, field border, button and button text. Leave a color empty to keep the default.
 
 Styling: override the CSS variables `--sf-accent`, `--sf-border`, `--sf-error` and `--sf-radius` on `.sf-wrap`, or turn off the default styles in Settings.
 

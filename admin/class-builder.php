@@ -16,7 +16,8 @@ class Spiral_Forms_Builder {
 		if ( false === strpos( (string) $hook, 'spiral-forms-edit' ) ) {
 			return;
 		}
-		wp_enqueue_script( 'spiral-forms-builder', SPIRAL_FORMS_URL . 'assets/js/builder.js', array( 'jquery', 'jquery-ui-sortable' ), SPIRAL_FORMS_VERSION, true );
+		wp_enqueue_style( 'wp-color-picker' );
+		wp_enqueue_script( 'spiral-forms-builder', SPIRAL_FORMS_URL . 'assets/js/builder.js', array( 'jquery', 'jquery-ui-sortable', 'wp-color-picker' ), SPIRAL_FORMS_VERSION, true );
 
 		$types = array();
 		foreach ( Spiral_Forms_Forms::field_types() as $key => $t ) {
@@ -190,6 +191,38 @@ class Spiral_Forms_Builder {
 						<tr>
 							<th><label for="sf-s-css_class"><?php esc_html_e( 'Form CSS classes', 'spiral-forms' ); ?></label></th>
 							<td><input type="text" class="regular-text" id="sf-s-css_class" data-setting="css_class"></td>
+						</tr>
+					</table>
+
+					<h2 class="sf-section-title"><?php esc_html_e( 'Appearance', 'spiral-forms' ); ?></h2>
+					<table class="form-table" role="presentation">
+						<tr>
+							<th><?php esc_html_e( 'Labels', 'spiral-forms' ); ?></th>
+							<td>
+								<label><input type="radio" name="sf_label_display" value="above" data-setting="label_display"> <?php esc_html_e( 'Above each field', 'spiral-forms' ); ?></label><br>
+								<label><input type="radio" name="sf_label_display" value="hidden" data-setting="label_display"> <?php esc_html_e( 'Hidden: show the label inside the box (as placeholder text)', 'spiral-forms' ); ?></label>
+								<p class="description"><?php esc_html_e( 'A field\'s own Placeholder is used if it has one, otherwise its label. Name fields show "First Name" / "Last Name". Labels stay readable to screen readers. Checkboxes, multiple choice, dates and file uploads keep their labels, since they have no box to put text in.', 'spiral-forms' ); ?></p>
+							</td>
+						</tr>
+						<?php
+						$colors = array(
+							'label_color'  => __( 'Label color', 'spiral-forms' ),
+							'field_bg'     => __( 'Field background', 'spiral-forms' ),
+							'field_text'   => __( 'Field text (and placeholder) color', 'spiral-forms' ),
+							'field_border' => __( 'Field border', 'spiral-forms' ),
+							'button_bg'    => __( 'Button color', 'spiral-forms' ),
+							'button_text'  => __( 'Button text color', 'spiral-forms' ),
+						);
+						foreach ( $colors as $key => $text ) :
+							?>
+							<tr>
+								<th><label for="sf-s-<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $text ); ?></label></th>
+								<td><input type="text" class="sf-color" id="sf-s-<?php echo esc_attr( $key ); ?>" data-setting="<?php echo esc_attr( $key ); ?>" placeholder="#ffffff"></td>
+							</tr>
+						<?php endforeach; ?>
+						<tr>
+							<th></th>
+							<td><p class="description"><?php esc_html_e( 'Leave a color empty (Clear) to keep the default look.', 'spiral-forms' ); ?></p></td>
 						</tr>
 					</table>
 				</div>

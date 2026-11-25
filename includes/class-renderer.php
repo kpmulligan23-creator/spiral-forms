@@ -61,7 +61,11 @@ class Spiral_Forms_Renderer {
 
 		ob_start();
 		?>
-		<div id="<?php echo esc_attr( $dom_id ); ?>" class="sf-wrap <?php echo esc_attr( $form['settings']['css_class'] ); ?>">
+		<?php
+		$hide_labels = 'hidden' === $form['settings']['label_display'];
+		$style       = self::style_vars( $form['settings'] );
+		?>
+		<div id="<?php echo esc_attr( $dom_id ); ?>" class="sf-wrap<?php echo $hide_labels ? ' sf-labels-hidden' : ''; ?> <?php echo esc_attr( $form['settings']['css_class'] ); ?>"<?php echo $style ? ' style="' . esc_attr( $style ) . '"' : ''; ?>>
 			<?php if ( ! empty( $errors['_form'] ) ) : ?>
 				<div class="sf-error-summary" role="alert"><?php echo esc_html( $errors['_form'] ); ?></div>
 			<?php elseif ( $errors ) : ?>
@@ -82,7 +86,7 @@ class Spiral_Forms_Renderer {
 				}
 				foreach ( $form['fields'] as $field ) {
 					$visible = Spiral_Forms_Forms::is_visible( $field, $flat );
-					echo self::render_field( $form['id'], $field, $current[ $field['id'] ], $errors[ $field['id'] ] ?? '', $visible ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+					echo self::render_field( $form['id'], $field, $current[ $field['id'] ], $errors[ $field['id'] ] ?? '', $visible, $hide_labels ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 				}
 				echo Spiral_Forms_Spam::render_fields( $form['id'] ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 				?>
@@ -93,6 +97,28 @@ class Spiral_Forms_Renderer {
 		</div>
 		<?php
 		return ob_get_clean();
+	}
+
+	/**
+	 * Per-form colors as CSS custom properties (empty = theme/default look).
+	 */
+	private static function style_vars( array $s ) {
+		$map = array(
+			'label_color'  => '--sf-label-color',
+			'field_bg'     => '--sf-field-bg',
+			'field_text'   => '--sf-field-text',
+			'field_border' => '--sf-field-border',
+			'button_bg'    => '--sf-button-bg',
+			'button_text'  => '--sf-button-text',
+		);
+		$css = '';
+		foreach ( $map as $key => $var ) {
+			$color = sanitize_hex_color( $s[ $key ] ?? '' );
+			if ( $color ) {
+				$css .= $var . ':' . $color . ';';
+			}
+		}
+		return $css;
 	}
 
 	private static function default_value( array $field ) {
@@ -106,7 +132,7 @@ class Spiral_Forms_Renderer {
 		return $field['default'];
 	}
 
-	private static function render_field( $form_id, array $f, $value, $error, $visible = true ) {
+	private static function render_field( $form_id, array $f, $value, $error, $visible = true, $hide_labels = false ) {
 		$id       = 'sf-' . $form_id . '-' . $f['id'];
 		$name     = 'sf_fields[' . $f['id'] . ']';
 		$required = ! empty( $f['required'] );
@@ -116,8 +142,13 @@ class Spiral_Forms_Renderer {
 		$aria     = ( $describe ? ' aria-describedby="' . esc_attr( $describe ) . '"' : '' )
 			. ( $error ? ' aria-invalid="true"' : '' )
 			. ( $required ? ' required aria-required="true"' : '' );
-		$ph       = $f['placeholder'] ? ' placeholder="' . esc_attr( $f['placeholder'] ) . '"' : '';
 		$parts    = Spiral_Forms_Submission::parts( $f );
+		// "Hidden" labels move inside the box as placeholders. Choices, dates and uploads
+		// have no box to put text in, so their labels stay visible.
+		$inside   = $hide_labels && ! in_array( $f['type'], array( 'checkbox', 'radio', 'date', 'file' ), true );
+		$ph_text  = $f['placeholder'] ? $f['placeholder'] : ( $inside ? $f['label'] : '' );
+		$ph       = '' !== $ph_text ? ' placeholder="' . esc_attr( $ph_text ) . '"' : '';
+		$lbl_cls  = 'sf-label' . ( $inside ? ' sf-sr-only' : '' );
 		$is_group = in_array( $f['type'], array( 'checkbox', 'radio' ), true ) || $parts;
 
 		$classes = 'sf-field sf-field-' . $f['type'] . ( $error ? ' sf-has-error' : '' ) . ( $f['css_class'] ? ' ' . $f['css_class'] : '' );
@@ -135,9 +166,9 @@ class Spiral_Forms_Renderer {
 		$html = '<div class="' . esc_attr( $classes ) . '"' . $attrs . '>';
 
 		if ( $is_group ) {
-			$html .= '<fieldset' . ( $describe ? ' aria-describedby="' . esc_attr( $describe ) . '"' : '' ) . '><legend class="sf-label">' . $label . '</legend>';
+			$html .= '<fieldset' . ( $describe ? ' aria-describedby="' . esc_attr( $describe ) . '"' : '' ) . '><legend class="' . esc_attr( $lbl_cls ) . '">' . $label . '</legend>';
 		} else {
-			$html .= '<label class="sf-label" for="' . esc_attr( $id ) . '">' . $label . '</label>';
+			$html .= '<label class="' . esc_attr( $lbl_cls ) . '" for="' . esc_attr( $id ) . '">' . $label . '</label>';
 		}
 
 		$str = is_array( $value ) ? '' : (string) $value;
@@ -145,8 +176,8 @@ class Spiral_Forms_Renderer {
 		if ( $parts ) {
 			$value  = is_array( $value ) ? $value : array();
 			$labels = array(
-				'first'    => array( __( 'First', 'spiral-forms' ), 'given-name', 'sf-col-half' ),
-				'last'     => array( __( 'Last', 'spiral-forms' ), 'family-name', 'sf-col-half' ),
+				'first'    => array( __( 'First Name', 'spiral-forms' ), 'given-name', 'sf-col-half' ),
+				'last'     => array( __( 'Last Name', 'spiral-forms' ), 'family-name', 'sf-col-half' ),
 				'address1' => array( __( 'Address Line 1', 'spiral-forms' ), 'address-line1', 'sf-col-full' ),
 				'address2' => array( __( 'Address Line 2', 'spiral-forms' ), 'address-line2', 'sf-col-full' ),
 				'city'     => array( __( 'City', 'spiral-forms' ), 'address-level2', 'sf-col-half' ),
@@ -160,8 +191,9 @@ class Spiral_Forms_Renderer {
 				$html .= '<div class="sf-part ' . esc_attr( $labels[ $p ][2] ) . '">'
 					. '<input type="text" id="' . esc_attr( $pid ) . '" name="' . esc_attr( $name . '[' . $p . ']' ) . '" value="' . esc_attr( $value[ $p ] ?? '' ) . '" autocomplete="' . esc_attr( $labels[ $p ][1] ) . '"'
 					. ( 'state' === $p ? ' maxlength="2"' : '' ) . ( 'postal' === $p ? ' inputmode="numeric"' : '' )
-					. ( $req ? ' required aria-required="true"' : '' ) . ( $error ? ' aria-invalid="true"' : '' ) . '>'
-					. '<label class="sf-sublabel" for="' . esc_attr( $pid ) . '">' . esc_html( $labels[ $p ][0] ) . '</label></div>';
+					. ( $req ? ' required aria-required="true"' : '' ) . ( $error ? ' aria-invalid="true"' : '' )
+					. ( $inside ? ' placeholder="' . esc_attr( $labels[ $p ][0] ) . '"' : '' ) . '>'
+					. '<label class="sf-sublabel' . ( $inside ? ' sf-sr-only' : '' ) . '" for="' . esc_attr( $pid ) . '">' . esc_html( $labels[ $p ][0] ) . '</label></div>';
 			}
 			$html .= '</div>';
 		}
@@ -176,7 +208,7 @@ class Spiral_Forms_Renderer {
 
 			case 'select':
 				$html .= '<select id="' . esc_attr( $id ) . '" name="' . esc_attr( $name ) . '"' . $aria . '>';
-				$html .= '<option value="">' . esc_html( $f['placeholder'] ? $f['placeholder'] : __( '— Select —', 'spiral-forms' ) ) . '</option>';
+				$html .= '<option value="">' . esc_html( '' !== $ph_text ? $ph_text : __( '— Select —', 'spiral-forms' ) ) . '</option>';
 				foreach ( $f['options'] as $opt ) {
 					$html .= '<option value="' . esc_attr( $opt ) . '"' . selected( $str, $opt, false ) . '>' . esc_html( $opt ) . '</option>';
 				}

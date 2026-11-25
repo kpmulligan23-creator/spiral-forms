@@ -64,6 +64,13 @@ class Spiral_Forms_Forms {
 			'store_spam'           => 1,
 			'retention_days'       => 0,
 			'css_class'            => '',
+			'label_display'        => 'above', // above | hidden (label text shown inside the box as a placeholder).
+			'label_color'          => '',
+			'field_bg'             => '',
+			'field_text'           => '',
+			'field_border'         => '',
+			'button_bg'            => '',
+			'button_text'          => '',
 			'notifications'        => array(
 				array(
 					'enabled'    => 1,
@@ -304,6 +311,13 @@ class Spiral_Forms_Forms {
 			'store_entries'        => empty( $s['store_entries'] ) ? 0 : 1,
 			'store_spam'           => empty( $s['store_spam'] ) ? 0 : 1,
 			'retention_days'       => max( 0, (int) $s['retention_days'] ),
+			'label_display'        => 'hidden' === $s['label_display'] ? 'hidden' : 'above',
+			'label_color'          => (string) sanitize_hex_color( $s['label_color'] ),
+			'field_bg'             => (string) sanitize_hex_color( $s['field_bg'] ),
+			'field_text'           => (string) sanitize_hex_color( $s['field_text'] ),
+			'field_border'         => (string) sanitize_hex_color( $s['field_border'] ),
+			'button_bg'            => (string) sanitize_hex_color( $s['button_bg'] ),
+			'button_text'          => (string) sanitize_hex_color( $s['button_text'] ),
 			'css_class'            => sanitize_html_class_list( $s['css_class'] ),
 			'notifications'        => $notifs,
 		);

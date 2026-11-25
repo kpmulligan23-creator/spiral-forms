@@ -51,3 +51,4 @@
 .sf-rule-del { color: #b32d2e !important; }
 .subsubsub .sf-count { color: #50575e; }
 .sf-file-link { text-decoration: none; } .sf-file-link .dashicons { vertical-align: text-bottom; }
+.sf-section-title { margin-top: 2em; padding-top: 1em; border-top: 1px solid #dcdcde; }
